@@ -1,6 +1,27 @@
+# CUDA excludes
 *.i
 *.ii
 *.gpu
 *.ptx
 *.cubin
 *.fatbin
+
+# Build directory
+build
+
+# Object file excludes
+*.o
+
+# Compiled library excludes
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+
+# Compiled executables
+*.exe
+*.out
+
+# Logs
+logs
