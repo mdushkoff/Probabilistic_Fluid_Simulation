@@ -9,7 +9,6 @@
 #include <math.h>
 #include <sstream>
 #include <string>
-#include <unistd.h>  // getopt
 #include <utility>
 
 // Conditional Includes
