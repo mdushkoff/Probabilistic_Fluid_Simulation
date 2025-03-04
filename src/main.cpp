@@ -23,6 +23,7 @@
 
 // Definitions
 #define NUM_CHANNELS (4)
+#define VP_RANGE (10.0)
 
 // Conditional Definitions
 #ifdef USE_CUDA
@@ -95,6 +96,17 @@ int main(int argc, char *argv[]){
     d_vp.y = input_image.height;
     d_vp.z = NUM_CHANNELS;
 #endif // USE_CUDA
+
+    // Rescale data to be within the range
+    for (int x=0; x<vp.x; x++){
+        for (int y=0; y<vp.y; y++){
+            for (int z=0; z<vp.z; z++){
+                int idx = x*vp.y*vp.z+y*vp.z+z;
+                float v = vp.data[idx];
+                vp.data[idx] = (v*VP_RANGE) - VP_RANGE/2.0;
+            }
+        }
+    }
 
 #ifdef USE_CUDA
     // Set up streams
