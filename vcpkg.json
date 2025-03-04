@@ -1,0 +1,9 @@
+{
+  "name": "fluid-sim",
+  "version": "1.0.0",
+  "dependencies": [
+    "zlib",
+    "libpng"
+  ],
+  "builtin-baseline": "566f9496b7e00ee0cc00aca0ab90493d122d148a"
+}

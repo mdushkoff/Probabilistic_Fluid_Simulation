@@ -25,3 +25,5 @@ build
 
 # Logs
 logs
+
+vcpkg_installed/
