@@ -13,6 +13,7 @@ set(EXECUTABLE_NAME_CPU "${EXECUTABLE_NAME}_cpu")
 
 # Packages
 find_package(PNG REQUIRED)
+find_library(MATH_LIBRARY m)
 
 # C++ standard
 set(CMAKE_CXX_STANDARD 11)
@@ -45,8 +46,8 @@ target_include_directories(${EXECUTABLE_NAME_CPU} PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/includes"
 )
 target_link_libraries(${EXECUTABLE_NAME_CPU}
-    png
-    m
+    ${PNG_LIBRARY}
+    ${MATH_LIBRARY}
 )
 
 # GPU Targets
@@ -71,7 +72,7 @@ if(USE_CUDA)
     )
     target_link_libraries(${EXECUTABLE_NAME_CUDA} PUBLIC
         CUDA::cudart
-        png
-        m
+        ${PNG_LIBRARY}
+        ${MATH_LIBRARY}
     )
 endif()
