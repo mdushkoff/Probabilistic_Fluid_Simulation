@@ -7,6 +7,9 @@
 #ifndef FLUID_HPP_
 #define FLUID_HPP_
 
+// Definitions
+#define NUM_JACOBI_ITERS (30)  // Total number of Jacobi iterations
+
 /*
  * Definition of a velocity-pressure field where
  * data is stored in a 3D array of size X,Y,Z.

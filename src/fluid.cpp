@@ -8,6 +8,10 @@
 // Local Includes
 #include "../includes/fluid.hpp"
 
+inline float jacobi(float xl, float xr, float xt, float xb, float alpha, float beta, float b){
+    return (xl+xr+xt+xb+alpha*b)/beta;
+}
+
 void advect(vp_field *vp){
     // TODO: Perform advection
 }
