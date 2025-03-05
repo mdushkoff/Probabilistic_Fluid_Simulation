@@ -31,7 +31,8 @@ void diffuse(vp_field *vp, float viscosity){
      * SOLUTION
      * u_n+1 = (u_n + alpha * (sum(neighbors_n)) / (1 + 4 * alpha)
      * --> alpha = v_const * delta(t)
-     * --> solve this system of equations with jacobi iteration
+     * --> solve the system of equations of all cells with jacobi iteration
+     *     (spatial dependencies require nudging toward solution)
      */
 
     //float alpha = viscosity * delta_t;
@@ -39,13 +40,13 @@ void diffuse(vp_field *vp, float viscosity){
     int width = vp->x, height = vp->y, depth = vp->z;
     float *data = vp->data;
     
-    for (int k = 0; k < depth; k++)
+    for (int iter = 0; iter < NUM_JACOBI_ITERS; iter++)
     {
-        for (int j = 0; j < height; j++)
+        for (int k = 0; k < depth; k++)
         {
-            for (int i = 0; i < width; i++)
+            for (int j = 0; j < height; j++)
             {
-                for (int iter = 0; iter < NUM_JACOBI_ITERS; iter++)
+                for (int i = 0; i < width; i++)
                 {
                     /*data_new[i, j, k] = jacobi(
                         data[i - 1, j, k], data[i + 1, j, k],
