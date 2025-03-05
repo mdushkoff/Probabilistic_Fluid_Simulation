@@ -17,7 +17,45 @@ void advect(vp_field *vp){
 }
 
 void diffuse(vp_field *vp, float viscosity){
-    // TODO: Perform diffusion
+    // !!! Needs delta_t and a results buffer !!!
+
+    /*
+     * THEORY
+     * del_u / del_t = v_const * nabla^2(u)
+     * u_n+1 - v_const * delta_t * nabla^2(u_n+1) = u_n
+     * u_n+1 - alpha * nabla^2(u_n+1) = u_n
+     * --> alpha = v_const * delta_t
+     * nabla^2(u) \approx sum(neighbors) - 4(u_i,j)
+     * (1 + 4\alpha) * u_n+1 - alpha * sum(neighbors_n+1) = u_n
+     * --------------------------------------------
+     * SOLUTION
+     * u_n+1 = (u_n + alpha * (sum(neighbors_n)) / (1 + 4 * alpha)
+     * --> alpha = v_const * delta(t)
+     * --> solve this system of equations with jacobi iteration
+     */
+
+    //float alpha = viscosity * delta_t;
+    //float beta = 1 + 4 * alpha;
+    int width = vp->x, height = vp->y, depth = vp->z;
+    float *data = vp->data;
+    
+    for (int k = 0; k < depth; k++)
+    {
+        for (int j = 0; j < height; j++)
+        {
+            for (int i = 0; i < width; i++)
+            {
+                for (int iter = 0; iter < NUM_JACOBI_ITERS; iter++)
+                {
+                    /*data_new[i, j, k] = jacobi(
+                        data[i - 1, j, k], data[i + 1, j, k],
+                        data[i, j - 1, k], data[i, j + 1, k],
+                        alpha, beta, 1.0);*/
+                    ;
+                }
+            }
+        }
+    }
 }
 
 void addForces(vp_field *vp, float *forces){
