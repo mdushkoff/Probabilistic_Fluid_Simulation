@@ -8,51 +8,58 @@
 // Local Includes
 #include "../includes/fluid.hpp"
 
-inline float jacobi(float xl, float xr, float xt, float xb, float alpha, float beta, float b){
-    return (xl+xr+xt+xb+alpha*b)/beta;
+namespace {
+    inline int asIdx(int i, int j, int k, int w, int h) {
+        return (i * w) + (j * w) * h + k;
+    }
+
+    inline float jacobi(float xl, float xr, float xt, float xb, float alpha, float beta, float b){
+        return (xl+xr+xt+xb+alpha*b)/beta;
+    }
 }
 
 void advect(vp_field *vp){
     // TODO: Perform advection
 }
 
-void diffuse(vp_field *vp, float viscosity){
-    // !!! Needs delta_t and a results buffer !!!
+void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float delta_t){
+    // THEORY
+    // del_u / del_t = v_const * nabla^2(u)
+    // u_n+1 - v_const * delta_t * nabla^2(u_n+1) = u_n
+    // u_n+1 - alpha * nabla^2(u_n+1) = u_n
+    //     --> alpha = v_const * delta_t
+    // nabla^2(u) \approx sum(neighbors) - 4(u_i,j)
+    // (1 + 4\alpha) * u_n+1 - alpha * sum(neighbors_n+1) = u_n
+    // --------------------------------------------
+    // SOLUTION
+    // u_n+1 = (u_n + alpha * (sum(neighbors_n)) / (1 + 4 * alpha)
+    //     --> alpha = v_const * delta(t)
+    //     --> solve the system of equations of all cells with jacobi iteration
+    //         (spatial dependencies require nudging toward solution)
 
-    /*
-     * THEORY
-     * del_u / del_t = v_const * nabla^2(u)
-     * u_n+1 - v_const * delta_t * nabla^2(u_n+1) = u_n
-     * u_n+1 - alpha * nabla^2(u_n+1) = u_n
-     * --> alpha = v_const * delta_t
-     * nabla^2(u) \approx sum(neighbors) - 4(u_i,j)
-     * (1 + 4\alpha) * u_n+1 - alpha * sum(neighbors_n+1) = u_n
-     * --------------------------------------------
-     * SOLUTION
-     * u_n+1 = (u_n + alpha * (sum(neighbors_n)) / (1 + 4 * alpha)
-     * --> alpha = v_const * delta(t)
-     * --> solve the system of equations of all cells with jacobi iteration
-     *     (spatial dependencies require nudging toward solution)
-     */
+    float alpha = viscosity * delta_t;
+    float beta = 1 + 4 * alpha;
 
-    //float alpha = viscosity * delta_t;
-    //float beta = 1 + 4 * alpha;
-    int width = vp->x, height = vp->y, depth = vp->z;
-    float *data = vp->data;
+    int w = vp->x, h = vp->y;
+    float *data = vp->data, float *data_out = vp_out->data;
     
-    for (int iter = 0; iter < NUM_JACOBI_ITERS; iter++)
+    // For x and y components of velocity
+    for (int k = 0; k < 2; k++)
     {
-        for (int k = 0; k < depth; k++)
+        for (int iter = 0; iter < NUM_JACOBI_ITERS; iter++)
         {
-            for (int j = 0; j < height; j++)
+            // Iterate over 2D grid
+            for (int j = 0; j < h; j++)
             {
-                for (int i = 0; i < width; i++)
+                for (int i = 0; i < w; i++)
                 {
-                    /*data_new[i, j, k] = jacobi(
-                        data[i - 1, j, k], data[i + 1, j, k],
-                        data[i, j - 1, k], data[i, j + 1, k],
-                        alpha, beta, 1.0);*/
-                    ;
+                    // Solve Laplacian
+                    data_out[asIdx(i, j, k, w, h)] = jacobi(
+                        data[asIdx(i - 1, j, k, w, h)],
+                        data[asIdx(i + 1, j, k, w, h)],
+                        data[asIdx(i, j - 1, k, w, h)],
+                        data[asIdx(i, j + 1, k, w, h)],
+                        alpha, beta, 1.0);
                 }
             }
         }

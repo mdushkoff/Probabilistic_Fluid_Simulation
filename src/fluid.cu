@@ -16,7 +16,7 @@ __global__ void advect(vp_field *vp){
     // TODO: Perform advection
 }
 
-__global__ void diffuse(vp_field *vp, float viscosity){
+__global__ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float delta_t){
     // TODO: Perform diffusion
 }
 

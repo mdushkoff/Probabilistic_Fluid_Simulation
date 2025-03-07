@@ -35,12 +35,14 @@ void advect(vp_field *vp);
  * Inputs:
  *     vp - A 3D array representing the current velocity/pressure values
  *         which is updated after running a single step of simulation
+ *     vp_out - Result for modified vp
  *     viscosity - The viscosity of the fluid
+ *     delta_t - Change in time (time step)
  */
 #ifdef USE_CUDA
 __global__
 #endif // USE_CUDA
-void diffuse(vp_field *vp, float viscosity);
+void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float delta_t);
 
 /*
  * Inputs:
