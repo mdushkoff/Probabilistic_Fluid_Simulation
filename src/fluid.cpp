@@ -22,7 +22,7 @@ void advect(vp_field *vp){
     // TODO: Perform advection
 }
 
-void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float delta_t){
+void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt){
     // THEORY
     // del_u / del_t = v_const * nabla^2(u)
     // u_n+1 - v_const * delta_t * nabla^2(u_n+1) = u_n
@@ -37,11 +37,11 @@ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float delta_t){
     //     --> solve the system of equations of all cells with jacobi iteration
     //         (spatial dependencies require nudging toward solution)
 
-    float alpha = viscosity * delta_t;
+    float alpha = viscosity * dt;
     float beta = 1 + 4 * alpha;
 
     int w = vp->x, h = vp->y;
-    float *data = vp->data, float *data_out = vp_out->data;
+    float *data = vp->data, *data_out = vp_out->data;
     
     // For x and y components of velocity
     for (int k = 0; k < 2; k++)
@@ -79,10 +79,19 @@ void subtractPressureGradient(vp_field *vp){
 }
 
 void simulate_fluid_step(vp_field *vp, float dt, float viscosity){
-    // Execute operators in order
+    // Create temporary buffer for results
+    vp_field vp_out;
+    vp_out.x = vp->x;
+    vp_out.y = vp->y;
+    vp_out.z = vp->z;
+    vp_out.data = (float *)malloc(sizeof(float) * vp_out.x * vp_out.y * vp_out.z);
+
+    // Execute operators in order (swapping buffers each step)
     advect(vp);
-    diffuse(vp, viscosity);
+    diffuse(&vp_out, vp, viscosity, dt);
     //addForces(vp_field, forces);  // TODO: eventually add forces
     computePressure(vp);
     subtractPressureGradient(vp);
+
+    free(vp_out.data);
 }

@@ -42,7 +42,7 @@ void advect(vp_field *vp);
 #ifdef USE_CUDA
 __global__
 #endif // USE_CUDA
-void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float delta_t);
+void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt);
 
 /*
  * Inputs:
