@@ -9,8 +9,10 @@
 #include "../includes/fluid.hpp"
 
 namespace {
-    inline int asIdx(int i, int j, int k, int w, int h) {
-        return (i * w) + (j * w) * h + k;
+    int NUM_CHANNELS = 4;
+
+    inline int asIdx(int i, int j, int k, int height) {
+        return (i * height * NUM_CHANNELS) + (j * NUM_CHANNELS) + k;
     }
 
     inline float jacobi(float xl, float xr, float xt, float xb, float alpha, float beta, float b){
@@ -43,22 +45,23 @@ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt){
     int w = vp->x, h = vp->y;
     float *data = vp->data, *data_out = vp_out->data;
     
-    // For x and y components of velocity
-    for (int k = 0; k < 2; k++)
+    // Jacobian iteration on outside to update all spatial dependencies
+    for (int iter = 0; iter < NUM_JACOBI_ITERS; iter++)
     {
-        for (int iter = 0; iter < NUM_JACOBI_ITERS; iter++)
+        // Iterate over 2D grid
+        for (int i = 0; i < w; i++)
         {
-            // Iterate over 2D grid
             for (int j = 0; j < h; j++)
             {
-                for (int i = 0; i < w; i++)
+                // For x and y components of velocity (channels 0 and 1)
+                for (int k = 0; k < 2; k++)
                 {
                     // Solve Laplacian
-                    data_out[asIdx(i, j, k, w, h)] = jacobi(
-                        data[asIdx(i - 1, j, k, w, h)],
-                        data[asIdx(i + 1, j, k, w, h)],
-                        data[asIdx(i, j - 1, k, w, h)],
-                        data[asIdx(i, j + 1, k, w, h)],
+                    data_out[asIdx(i, j, k, h)] = jacobi(
+                        data[asIdx(i - 1, j, k, h)],
+                        data[asIdx(i + 1, j, k, h)],
+                        data[asIdx(i, j - 1, k, h)],
+                        data[asIdx(i, j + 1, k, h)],
                         alpha, beta, 1.0);
                 }
             }
