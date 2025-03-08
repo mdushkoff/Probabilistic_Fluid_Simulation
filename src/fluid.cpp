@@ -70,21 +70,21 @@ void computePressure(vp_field *vp){
                 float pL =  (leftIdx > -1 ? data[leftIdx] : 0.0f);
                 float pR = (rightIdx < width * 4 ? data[rightIdx] : 0.0f);
                 float pT = (topIdx > -1 ? data[topIdx] : 0.0f);
-                float pB = (rightIdx < height * 4 ? data[bottomIdx] : 0.0f);
+                float pB = (bottomIdx < height * 4 ? data[bottomIdx] : 0.0f);
                 float b = data[divergenceIdx];
 
                 newPressure[index + 2] = jacobi(pL, pR, pT, pB, alpha, beta, b);
             }
-        }  
-    }
-
-    // Copy back new pressure values to the original data array
-    for (int j = 0; j < height; j++) {
-        for (int i = 0; i < width; i++) {
-            int index = (j * width + i) * 4;
-            data[index + 2] = newPressure[index + 2];
+        } 
+        // Copy back new pressure values to the original data array
+        for (int j = 0; j < height; j++) {
+            for (int i = 0; i < width; i++) {
+                int index = (j * width + i) * 4;
+                data[index + 2] = newPressure[index + 2];
+            }
         }
     }
+
     
     delete[] newPressure;
 }
