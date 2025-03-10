@@ -51,8 +51,8 @@ void computePressure(vp_field *vp){
     // Compute divergence and store it in D
     for (int i = 0; i < w; i++) {
         for (int j = 0; j < h; j++) {            
-            float uR = (i < w - 1 ? data[asIdx(i + 1, j, 0, h)] : 1.0f) - (i > 0 ? data[asIdx(i - 1, j, 0, h)] : 0.0f);
-            float vT = (j < h - 1 ? data[asIdx(i, j + 1, 1, h)] : 1.0f) - (j > 0 ? data[asIdx(i, j - 1, 1, h)] : 0.0f);
+            float uR = (i < w - 1 ? data[asIdx(i + 1, j, 0, h)] : 0.0f) - (i > 0 ? data[asIdx(i - 1, j, 0, h)] : 0.0f);
+            float vT = (j < h - 1 ? data[asIdx(i, j + 1, 1, h)] : 0.0f) - (j > 0 ? data[asIdx(i, j - 1, 1, h)] : 0.0f);
             
             data[asIdx(i, j, 3, h)] = 0.5f * (uR + vT);
         }
@@ -84,8 +84,28 @@ void computePressure(vp_field *vp){
     delete newPressure;
 }
 
-void subtractPressureGradient(vp_field *vp){
-    // TODO: Perform pressure gradient subtraction
+void subtractPressureGradient(vp_field *vp) {
+    int w = vp->x, h = vp->y, d = vp->z;
+    float *data = vp->data;
+
+    // *** Emad: Is this calculation correct? ***
+    for (int i = 0; i < w; i++) {
+        for (int j = 0; j < h; j++) {
+            // Compute pressure differences (gradient)
+            float pR = (i < w - 1) ? data[asIdx(i + 1, j, 2, h)] : 0.0f;
+            float pL = (i > 0) ? data[asIdx(i - 1, j, 2, h)] : 0.0f;
+            float pT = (j < h - 1) ? data[asIdx(i, j + 1, 2, h)] : 0.0f;
+            float pB = (j > 0) ? data[asIdx(i, j - 1, 2, h)] : 0.0f;
+
+            // Compute gradient components
+            float gradX = (pR - pL)/2.0f;
+            float gradY = (pT - pB)/2.0f;
+
+            // Subtract the gradient from velocity
+            data[asIdx(i, j, 0, h)] -= gradX;
+            data[asIdx(i, j, 1, h)] -= gradY;
+        }
+    }
 }
 
 void simulate_fluid_step(vp_field *vp, float dt, float viscosity){
