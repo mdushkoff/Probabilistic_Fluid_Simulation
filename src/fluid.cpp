@@ -38,9 +38,6 @@ void computePressure(vp_field *vp, vp_field *vp_out){
     int w = vp->x, h = vp->y, d = vp->z;
     float *data_in = vp->data;
     
-    // memcpy(vp_out->data, data_in, sizeof(float) * w * h * d);
-    // float *p_new  = (float *)malloc(sizeof(float) * w * h * d);
-    
     float alpha = -1.0f;
     float beta = 4.0f;
     
@@ -75,15 +72,7 @@ void computePressure(vp_field *vp, vp_field *vp_out){
             vp_out->data = data_in;
             data_in = tp;
         }
-        // Copy back new pressure values to the original data array
-        // for (int i = 0; i < w; i++) {
-        //     for (int j = 0; j < h; j++) {
-        //         int idx = asIdx(i, j, 2, w);
-        //         vp_out->data[idx] = p_new[idx];
-        //     }
-        // }
     }
-    // free(p_new);
 }
 
 void subtractPressureGradient(vp_field *vp, vp_field *vp_out) {
@@ -161,11 +150,6 @@ void test_computePressure() {
         std::cout << std::endl;
     }
     std::cout << std::endl;
-
-    // Clean up memory
-    // delete[] test_field.data;
-    // delete[] newPressure->data;
-    // delete newPressure;
 }
 
 void test_subtractPressureGradient() {
