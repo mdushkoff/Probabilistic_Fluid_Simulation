@@ -21,13 +21,35 @@ namespace {
     }
 }
 
-void advect(vp_field *vp, vp_field *vp_out){
-    // Perform advection
-    int w = vp->x, h = vp->y, c = vp->z;
-    for (int x=0; x<w; x++){
-        for (int y=0; y<h; y++){
-            for (int z=0; z<c; z++){
-                vp_out->data[asIdx(x, y, z, h, c)] = vp->data[asIdx(x, y, z, h, c)];  // TODO: Perform advection (This is just identity)
+void advect(vp_field *vp, vp_field *vp_out, double dt){
+    // TODO: Perform advection
+    int width = vp->x, height = vp->y, depth = vp->z;
+    float *field = vp->data;
+    float *new_field = vp_out->data;
+
+    for (int j = 1; j < height - 1; j++) {
+        for (int i = 1; i < width - 1; i++) { // Iterate through the inner part in the grid
+            int x_idx = asIdx(i, j, 0, width, depth); // Cell index for x
+            int y_idx = asIdx(i, j, 1, width, depth); // Cell index for y
+
+            float x_prev = i - dt * field[x_idx] / width; // Compute the where the fluid came from at the previous time stamp // Divided by h so can convert velocity into grid units
+            // Offset index to get velocity in y direction
+            float y_prev = j - dt * field[y_idx] / height;
+
+            x_prev = std::max(0.5f, std::min<float>(width - 1.5, x_prev)); // Get the center of cooridinates and prevent out-of-bounds errors
+            y_prev = std::max(0.5f, std::min<float>(height - 1.5, y_prev));
+
+            int i0 = int(x_prev), j0 = int(y_prev);
+            int i1 = i0 + 1, j1 = j0 + 1; // Find the integer grid coordinates surrounding (x, y)
+            float sx = x_prev - i0, sy = y_prev - j0; // Represent the fractional distances from (i0, j0)
+
+            // Bilinear Interpolation
+            for (int vel_dir = 0; vel_dir < 2; vel_dir++) {
+                new_field[asIdx(i, j, vel_dir, height, depth)] = 
+                    (1 - sx) * (1 - sy) * field[asIdx(i0, j0, vel_dir, width, depth)] +
+                    sx * (1 - sy) * field[asIdx(i1, j0, vel_dir, width, depth)] +
+                    (1 - sx) * sy * field[asIdx(i0, j1, vel_dir, width, depth)] +
+                    sx * sy * field[asIdx(i1, j1, vel_dir, width, depth)];
             }
         }
     }
@@ -289,7 +311,7 @@ void test_subtractPressureGradient() {
 
 void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity){
     // Execute operators in order (swapping buffers each step)
-    advect(vp, tmp);
+    advect(vp, tmp, dt);
     diffuse(tmp, vp, viscosity, dt);
     //addForces(vp_field, forces);  // TODO: eventually add forces
     computePressure(vp, tmp);
