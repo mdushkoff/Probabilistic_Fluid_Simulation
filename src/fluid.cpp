@@ -164,26 +164,27 @@ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt){
                     right = (i != (w-1)) ? data[asIdx(i + 1, j, k, w, c)] : 0.0; // TODO: Figure out boundary
                     top = (j != 0) ? data[asIdx(i, j - 1, k, w, c)] : 0.0; // TODO: Figure out boundary
                     bottom = (j != (h-1)) ? data[asIdx(i, j + 1, k, w, c)] : 0.0; // TODO: Figure out boundary
+                    float u_n = data[asIdx(i, j, k, w, c)];
 
                     // Solve Laplacian
                     data_out[asIdx(i, j, k, w, c)] = jacobi(
-                        left,
-                        right,
-                        top,
-                        bottom,
-                        alpha, beta, 1.0);
+                        alpha * left,
+                        alpha * right,
+                        alpha * top,
+                        alpha * bottom,
+                        1.0f,
+                        beta,
+                        u_n);
                 }
             }
         }
 
         // Swap buffers
-        if (iter != (NUM_JACOBI_ITERS-1)){
-            float *tp = vp_out->data;
-            vp_out->data = vp->data;
-            vp->data = tp;
-            data = vp->data;
-            data_out = vp_out->data;
-        }
+        float *tp = vp_out->data;
+        vp_out->data = vp->data;
+        vp->data = tp;
+        data = vp->data;
+        data_out = vp_out->data;
     }
 }
 
@@ -209,44 +210,44 @@ void computePressure(vp_field *vp, vp_field *vp_out){
     
 
     // Compute divergence and store it in D
-    for (int i = 0; i < w; i++) {
-        for (int j = 0; j < h; j++) {            
-            float uR = (i < w - 1 ? data_in[asIdx(i + 1, j, 0, w, d)] : 0.0f) - (i > 0 ? data_in[asIdx(i - 1, j, 0, w, d)] : 0.0f);
-            float vT = (j < h - 1 ? data_in[asIdx(i, j + 1, 1, w, d)] : 0.0f) - (j > 0 ? data_in[asIdx(i, j - 1, 1, w, d)] : 0.0f);
+    // for (int i = 0; i < w; i++) {
+    //     for (int j = 0; j < h; j++) {            
+    //         float uR = (i < w - 1 ? data_in[asIdx(i + 1, j, 0, w, d)] : 0.0f) - (i > 0 ? data_in[asIdx(i - 1, j, 0, w, d)] : 0.0f);
+    //         float vT = (j < h - 1 ? data_in[asIdx(i, j + 1, 1, w, d)] : 0.0f) - (j > 0 ? data_in[asIdx(i, j - 1, 1, w, d)] : 0.0f);
             
-            data_in[asIdx(i, j, 3, w, d)] = 0.5f * (uR + vT);
-        }
-    }
+    //         data_in[asIdx(i, j, 3, w, d)] = 0.5f * (uR + vT);
+    //     }
+    // }
     
     for (int iter = 0; iter < NUM_JACOBI_ITERS; iter++) {
         for (int i = 0; i < w; i++) {
             for (int j = 0; j < h; j++) {
+                // Compute divergence
+                float uR = (i < w - 1 ? data_in[asIdx(i + 1, j, 0, w, d)] : 0.0f) - (i > 0 ? data_in[asIdx(i - 1, j, 0, w, d)] : 0.0f);
+                float vT = (j < h - 1 ? data_in[asIdx(i, j + 1, 1, w, d)] : 0.0f) - (j > 0 ? data_in[asIdx(i, j - 1, 1, w, d)] : 0.0f);
+            
                 // Pressure Values
                 float pL = (i > 0     ? data_in[asIdx(i - 1, j, 2, w, d)] : 0.0f);
                 float pR = (i < w - 1 ? data_in[asIdx(i + 1, j, 2, w, d)] : 0.0f);
                 float pT = (j > 0     ? data_in[asIdx(i, j - 1, 2, w, d)] : 0.0f);
                 float pB = (j < h - 1 ? data_in[asIdx(i, j + 1, 2, w, d)] : 0.0f);
-                float b = data_in[asIdx(i, j, 3, w, d)];
+                float b = 0.5f * (uR + vT);;
 
                 vp_out->data[asIdx(i, j, 2, w, d)] = jacobi(pL, pR, pT, pB, alpha, beta, b);
             }
         }
 
         // Swap buffers
-        if (iter < (NUM_JACOBI_ITERS - 1)) {
-            float* tp = vp_out->data;
-            vp_out->data = vp->data;
-            vp->data = tp;
-            data_in = vp->data;
-        }
+        float* tp = vp_out->data;
+        vp_out->data = vp->data;
+        vp->data = tp;
+        data_in = vp->data;
     }
 }
 
 void subtractPressureGradient(vp_field *vp, vp_field *vp_out) {
     int w = vp->x, h = vp->y, d = vp->z;
     float *data_in = vp->data;
-
-    // memcpy(vp_out->data, data_in, sizeof(float) * w * h * d);
 
     for (int i = 0; i < w; i++) {
         for (int j = 0; j < h; j++) {
@@ -262,23 +263,23 @@ void subtractPressureGradient(vp_field *vp, vp_field *vp_out) {
 
             // Subtract the gradient from velocity
             vp_out->data[asIdx(i, j, 0, w, d)] = data_in[asIdx(i, j, 0, w, d)] - gradX;
-            vp_out->data[asIdx(i, j, 1, w, d)] = data_in[asIdx(i, j, 0, w, d)] - gradY;
+            vp_out->data[asIdx(i, j, 1, w, d)] = data_in[asIdx(i, j, 1, w, d)] - gradY;
         }
     }
 }
 
 void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity){
     // Execute operators in order (swapping buffers each step)
-    /*advect(vp, tmp, dt);
+    advect(vp, tmp, dt);
     diffuse(tmp, vp, viscosity, dt);
     //addForces(vp_field, forces);  // TODO: eventually add forces
     computePressure(vp, tmp);
-    subtractPressureGradient(tmp, vp);*/
+    subtractPressureGradient(tmp, vp);
 
-    advect(vp, tmp, dt);
+    /*advect(vp, tmp, dt);
     float* tp = tmp->data;
     tmp->data = vp->data;
-    vp->data = tp;
+    vp->data = tp;*/
 }
 
 void advect_color_step(vp_field *image, vp_field *itmp, vp_field *vp, float dt){
