@@ -71,7 +71,7 @@ void computePressure(vp_field *vp, vp_field *vp_out);
 #ifdef USE_CUDA
 __global__
 #endif // USE_CUDA
-void subtractPressureGradient(vp_field *vp);
+void subtractPressureGradient(vp_field *vp, vp_field *vp_out);
 
 /*
  * Simulate the current fluid domain for a single
