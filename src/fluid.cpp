@@ -79,7 +79,7 @@ void subtractPressureGradient(vp_field *vp, vp_field *vp_out) {
     int w = vp->x, h = vp->y, d = vp->z;
     float *data_in = vp->data;
 
-    // memcpy(vp_out->data, data_in, sizeof(float) * w * h * d);
+    memcpy(vp_out->data, data_in, sizeof(float) * w * h * d);
 
     for (int i = 0; i < w; i++) {
         for (int j = 0; j < h; j++) {
