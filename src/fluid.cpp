@@ -207,5 +207,6 @@ void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity)
     //addForces(vp_field, forces);  // TODO: eventually add forces
     computePressure(vp, tmp);
     subtractPressureGradient(tmp, vp);
-    memcpy(tmp->data, vp->data, sizeof(float) * vp->x * vp->y * vp->z);
+    // memcpy(tmp->data, vp->data, sizeof(float) * vp->x * vp->y * vp->z);
+    vp->data = tmp->data;
 }
