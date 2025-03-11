@@ -101,6 +101,15 @@ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt){
                 }
             }
         }
+
+        // Swap buffers
+        if (iter != (NUM_JACOBI_ITERS-1)){
+            float *tp = vp_out->data;
+            vp_out->data = vp->data;
+            vp->data = tp;
+            data = vp->data;
+            data_out = vp_out->data;
+        }
     }
 }
 
