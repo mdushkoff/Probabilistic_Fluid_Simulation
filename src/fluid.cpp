@@ -4,6 +4,7 @@
 
 // System Includes
 #include <iostream>
+#include <math.h>
 
 // Local Includes
 #include "../includes/fluid.hpp"
@@ -21,7 +22,7 @@ namespace {
 }
 
 void advect(vp_field *vp, vp_field *vp_out, double dt){
-    // TODO: Perform advection
+    // Perform advection
     int width = vp->x, height = vp->y, depth = vp->z;
     float *field = vp->data;
     float *new_field = vp_out->data;
@@ -30,8 +31,8 @@ void advect(vp_field *vp, vp_field *vp_out, double dt){
     float fwidth = (float)width;
     float fheight = (float)height;
 
-    for (int j = 1; j < height - 1; j++) {
-        for (int i = 1; i < width - 1; i++) { // Iterate through the inner part in the grid
+    for (int j = 0; j < height; j++) {
+        for (int i = 0; i < width; i++) { // Iterate through the inner part in the grid
             int x_idx = asIdx(i, j, 0, width, depth); // Cell index for x
             int y_idx = asIdx(i, j, 1, width, depth); // Cell index for y
 
@@ -39,11 +40,21 @@ void advect(vp_field *vp, vp_field *vp_out, double dt){
             // Offset index to get velocity in y direction
             float y_prev = (float)j - dt * field[y_idx] / fheight;
 
-            x_prev = std::max(0.5f, std::min<float>(fwidth - 1.5, x_prev)); // Get the center of cooridinates and prevent out-of-bounds errors
-            y_prev = std::max(0.5f, std::min<float>(fheight - 1.5, y_prev));
+            // Clamp mode
+            //x_prev = std::max(0.5f, std::min<float>(fwidth - 1.5, x_prev)); // Get the center of cooridinates and prevent out-of-bounds errors
+            //y_prev = std::max(0.5f, std::min<float>(fheight - 1.5, y_prev));
+
+            // Wrapping mode
+            float xrem = fmod(fmod(x_prev, fwidth) + fwidth, fwidth);
+            float yrem = fmod(fmod(y_prev, fheight) + fheight, fheight);
+            x_prev = xrem;
+            y_prev = yrem;
+            //x_prev = (x_prev >= 0) ? xrem : xrem + fwidth;
+            //y_prev = (y_prev >= 0) ? yrem : yrem + fheight;
 
             int i0 = int(x_prev), j0 = int(y_prev);
-            int i1 = i0 + 1, j1 = j0 + 1; // Find the integer grid coordinates surrounding (x, y)
+            //int i1 = i0 + 1, j1 = j0 + 1; // Find the integer grid coordinates surrounding (x, y) (Clamp mode)
+            int i1 = (i0 + 1) % width, j1 = (j0 + 1) % height; // Find the integer grid coordinates surrounding (x, y) (Wrapping mode)
             float sx = x_prev - (float)i0, sy = y_prev - (float)j0; // Represent the fractional distances from (i0, j0)
 
             // Bilinear Interpolation
@@ -53,6 +64,63 @@ void advect(vp_field *vp, vp_field *vp_out, double dt){
                     sx * (1 - sy) * field[asIdx(i1, j0, vel_dir, width, depth)] +
                     (1 - sx) * sy * field[asIdx(i0, j1, vel_dir, width, depth)] +
                     sx * sy * field[asIdx(i1, j1, vel_dir, width, depth)];
+            }
+        }
+    }
+}
+
+void advect_color(vp_field *image, vp_field *itmp, vp_field *vp, float dt){
+    // Get dimensions
+    int iwidth = image->x, iheight = image->y, idepth = image->z;
+    int vwidth = vp->x, vheight = vp->y, vdepth = vp->z;
+
+    // Float constants
+    float fiwidth = (float)iwidth;
+    float fiheight = (float)iheight;
+    float fvwidth = (float)vwidth;
+    float fvheight = (float)vheight;
+    float viw = (fvwidth/fiwidth); // Fractional velocity width to image width
+    float vih = (fvheight/fiheight); // Fractional velocity height to image height
+
+    // Loop through all pixels and advect
+    for (int j = 0; j < iheight; j++) {
+        for (int i = 0; i < iwidth; i++) {
+            // Get velocity adjusted coordinates
+            int vi = (int)((float)i * viw);
+            int vj = (int)((float)j * vih);
+
+            // Get velocity indices
+            int vx_idx = asIdx(vi, vj, 0, vwidth, vdepth); // Cell index for x
+            int vy_idx = asIdx(vi, vj, 1, vwidth, vdepth); // Cell index for y
+
+            // Calculate previous coordinate
+            float x_prev = (float)i - (dt/viw) * vp->data[vx_idx] / fiwidth; // Compute the where the color came from at the previous time stamp // Divided by h so can convert velocity into grid units
+            float y_prev = (float)j - (dt/vih) * vp->data[vy_idx] / fiheight;
+
+            // Clamp mode
+            //x_prev = std::max(0.5f, std::min<float>(fiwidth - 1.5, x_prev)); // Get the center of cooridinates and prevent out-of-bounds errors
+            //y_prev = std::max(0.5f, std::min<float>(fiheight - 1.5, y_prev));
+
+            // Wrapping mode
+            x_prev = fmod(fmod(x_prev, fiwidth)+fiwidth, fiwidth);
+            y_prev = fmod(fmod(y_prev, fiheight)+fiheight, fiheight);
+            //float xrem = fmod(x_prev, fiwidth);
+            //float yrem = fmod(y_prev, fiheight);
+            //x_prev = (x_prev >= 0) ? xrem : xrem + fiwidth;
+            //y_prev = (y_prev >= 0) ? yrem : yrem + fiheight;
+
+            int i0 = int(x_prev), j0 = int(y_prev);
+            int i1 = (i0 + 1) % iwidth, j1 = (j0 + 1) % iheight; // Find the integer grid coordinates surrounding (x, y)
+            float sx = x_prev - (float)i0, sy = y_prev - (float)j0; // Represent the fractional distances from (i0, j0)
+
+            // Apply velocity to each channel
+            for (int k=0; k<idepth; k++){
+                // Bilinear interpolation
+                itmp->data[asIdx(i, j, k, iwidth, idepth)] = 
+                    (1 - sx) * (1 - sy) * image->data[asIdx(i0, j0, k, iwidth, idepth)] +
+                    sx * (1 - sy) * image->data[asIdx(i1, j0, k, iwidth, idepth)] +
+                    (1 - sx) * sy * image->data[asIdx(i0, j1, k, iwidth, idepth)] +
+                    sx * sy * image->data[asIdx(i1, j1, k, iwidth, idepth)];
             }
         }
     }
@@ -201,9 +269,24 @@ void subtractPressureGradient(vp_field *vp, vp_field *vp_out) {
 
 void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity){
     // Execute operators in order (swapping buffers each step)
-    advect(vp, tmp, dt);
+    /*advect(vp, tmp, dt);
     diffuse(tmp, vp, viscosity, dt);
     //addForces(vp_field, forces);  // TODO: eventually add forces
     computePressure(vp, tmp);
-    subtractPressureGradient(tmp, vp);
+    subtractPressureGradient(tmp, vp);*/
+
+    advect(vp, tmp, dt);
+    float* tp = tmp->data;
+    tmp->data = vp->data;
+    vp->data = tp;
+}
+
+void advect_color_step(vp_field *image, vp_field *itmp, vp_field *vp, float dt){
+    // Run advection on the color data
+    advect_color(image, itmp, vp, dt);
+    
+    // Swap buffers
+    float* tp = image->data;
+    image->data = itmp->data;
+    itmp->data = tp;
 }

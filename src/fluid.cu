@@ -16,6 +16,10 @@ __global__ void advect(vp_field *vp, vp_field *vp_out){
     // TODO: Perform advection
 }
 
+__global__ void advect_color(vp_field *image, vp_field *out, vp_field *vp, float dt){
+    // TODO: Perform color advection
+}
+
 __global__ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt){
     // TODO: Perform diffusion
 }
@@ -38,4 +42,12 @@ void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity)
     ////addForces<<<,BLOCK_SIZE>>>(vp_field, forces);  // TODO: eventually add forces
     //computePressure<<<,BLOCK_SIZE>>>(vp);
     //subtractPressureGradient<<<,BLOCK_SIZE>>>(vp);
+}
+
+void advect_color_step(vp_field *image, vp_field *itmp, vp_field *vp, float dt){
+    // Run advection on the color data
+    //advect_color<<<,BLOCK_SIZE>>>(image, itmp, vp, dt);
+    
+    // Swap buffers
+
 }

@@ -33,10 +33,22 @@ void advect(vp_field *vp, vp_field *vp_out);
 
 /*
  * Inputs:
+ *     image - The color image to advect
+ *     out - The resulting output image
+ *     vp - A 3D array representing the current velocity/pressure values
+ *     dt - Change in time (time step)
+ */
+#ifdef USE_CUDA
+__global__
+#endif // USE_CUDA
+void advect_color(vp_field *image, vp_field *out, vp_field *vp, float dt);
+
+/*
+ * Inputs:
  *     vp - A 3D array representing the current velocity/pressure values
  *     vp_out - Result for modified vp
  *     viscosity - The viscosity of the fluid
- *     delta_t - Change in time (time step)
+ *     dt - Change in time (time step)
  */
 #ifdef USE_CUDA
 __global__
@@ -86,5 +98,10 @@ void subtractPressureGradient(vp_field *vp, vp_field *vp_out);
  *     viscosity - The viscosity of the fluid
  */
 void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity);
+
+/*
+ *
+ */
+void advect_color_step(vp_field *image, vp_field *itmp, vp_field *vp, float dt);
 
 #endif // FLUID_HPP_
