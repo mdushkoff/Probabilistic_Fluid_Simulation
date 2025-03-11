@@ -3,6 +3,7 @@
 #include <cmath>
 #include <iomanip>
 #include <cstdlib>
+#include <cassert>
 
 #include "../../includes/fluid.hpp"
 

@@ -4,7 +4,6 @@
 
 // System Includes
 #include <iostream>
-#include <cassert>
 
 // Local Includes
 #include "../includes/fluid.hpp"
