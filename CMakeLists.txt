@@ -14,6 +14,7 @@ set(EXECUTABLE_NAME_CPU "${EXECUTABLE_NAME}_cpu")
 # Packages
 find_package(PNG REQUIRED)
 find_library(MATH_LIBRARY m)
+find_package(Boost 1.40 COMPONENTS filesystem REQUIRED)
 
 # C++ standard
 set(CMAKE_CXX_STANDARD 11)
@@ -48,6 +49,7 @@ target_include_directories(${EXECUTABLE_NAME_CPU} PUBLIC
 target_link_libraries(${EXECUTABLE_NAME_CPU}
     ${PNG_LIBRARY}
     ${MATH_LIBRARY}
+    Boost::filesystem
 )
 
 # GPU Targets
@@ -74,5 +76,6 @@ if(USE_CUDA)
         CUDA::cudart
         ${PNG_LIBRARY}
         ${MATH_LIBRARY}
+        Boost::filesystem
     )
 endif()
