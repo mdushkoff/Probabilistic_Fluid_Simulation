@@ -38,47 +38,26 @@
  * Print the program usage
  */
 void usage(char *prog){
-    std::cerr << "Usage: " << prog << " <n_timesteps> <delta_t> <viscosity> <initial_field> <output_dir>" << std::endl;
+    std::cerr << "Usage: " << prog << " <n_timesteps> <delta_t> <viscosity> <input_image> <velocity_field> <output_dir>" << std::endl;
 }
 
 /*
  * Write an output to the results directory.
  *
  * Inputs:
- *     vp -  A 3D array representing the current velocity/pressure values
- *     output_image - A reference to a png_image structure
+ *     image - Image data structure
+ *     img_handle - A reference to a png_image structure
  *     i - The current iteration number
  *     dir - The output directory
  */
-void write_to_output(vp_field *vp, png_image *output_image, int i, char *dir){
-    // Copy data to a temporary buffer and normalize it
-    int w = vp->x;
-    int h = vp->y;
-    int c = vp->z;
-    size_t image_bytes = sizeof(float)*h*w*c;
-    float *out = (float*)malloc(image_bytes);
-    memcpy(out, vp->data, image_bytes);
-
-    // Normalize the output array
-    for (int x=0; x<w; x++){
-        for (int y=0; y<h; y++){
-            for (int z=0; z<c; z++){
-                int idx = y*h*c+x*c+z;
-                out[idx] = (out[idx] + VP_RANGE/2.0) / VP_RANGE;
-            }
-        }
-    }
-
+void write_to_output(vp_field *image, png_image *img_handle, int i, char *dir){
     // Write data to a png file
     std::string ext(".png");
     boost::filesystem::path base(dir);
     boost::filesystem::path fn(std::to_string(i) + ext);
     boost::filesystem::path outpath = base / fn;
     std::cout << "[" << i << "] Writing to : " << outpath.c_str() << std::endl;
-    write_png_from_array(output_image, outpath.c_str(), &out);
-
-    // Free memory
-    free(out);
+    write_png_from_array(img_handle, outpath.c_str(), &(image->data));
 }
 
 int main(int argc, char *argv[]){
@@ -86,25 +65,30 @@ int main(int argc, char *argv[]){
     std::chrono::high_resolution_clock::time_point time_start;
     std::chrono::high_resolution_clock::time_point time_end;
 
-    // PNG inputs
+    // PNG velocitys
     int status;
     png_image input_image;
+    png_image velocity_image;
 
     // Image data
-    vp_field vp;  // 2D velocity + pressure field (RG,B)
-    vp_field tmp; // Temporary buffer
+    vp_field image;   // Input image
+    vp_field vp;      // 2D velocity + pressure field (RG,B)
+    vp_field itmp;    // Temporary image buffer
+    vp_field vtmp;    // Temporary velocity buffer
 
 #ifdef USE_CUDA
     // Device data
-    vp_field d_vp;  // 2D Velocity + pressure field (RG,B) on device memory
-    vp_field d_tmp; // Temporary buffer on device memory
+    vp_field d_image; // Input image on device memory
+    vp_field d_vp;    // 2D Velocity + pressure field (RG,B) on device memory
+    vp_field d_itmp;  // Temporary image buffer on device memory
+    vp_field d_vtmp;  // Temporary velocity buffer on device memory
 
     // Streams
     cudaStream_t streams[NUM_STREAMS];
 #endif
 
     // Parse arguments
-    if (argc != 6){
+    if (argc != 7){
         usage(argv[0]);
         return 1;
     }
@@ -122,27 +106,49 @@ int main(int argc, char *argv[]){
         return 1;
     }
 
-    // Try to load the initial field
-    status = read_png_to_array(&input_image, argv[4], &(vp.data));
+    // Try to load the velocity image
+    status = read_png_to_array(&input_image, argv[4], &(image.data));
     if (status != 0){
-        std::cerr << "Something went wrong reading the initial input field..." << std::endl;
+        std::cerr << "Something went wrong reading the input image..." << std::endl;
+        return 1;
+    }
+
+    // Try to load the initial velocity field
+    status = read_png_to_array(&velocity_image, argv[5], &(vp.data));
+    if (status != 0){
+        std::cerr << "Something went wrong reading the initial velocity field..." << std::endl;
         return 1;
     }
 
     // Set internal properties
-    vp.x = input_image.width;
-    vp.y = input_image.height;
+    image.x = input_image.width;
+    image.y = input_image.height;
+    image.z = NUM_CHANNELS;
+    vp.x = velocity_image.width;
+    vp.y = velocity_image.height;
     vp.z = NUM_CHANNELS;
-    tmp.x = input_image.width;
-    tmp.y = input_image.height;
-    tmp.z = NUM_CHANNELS;
+    itmp.x = input_image.width;
+    itmp.y = input_image.height;
+    itmp.z = NUM_CHANNELS;
+    vtmp.x = velocity_image.width;
+    vtmp.y = velocity_image.height;
+    vtmp.z = NUM_CHANNELS;
 #ifdef USE_CUDA
-    d_vp.x = input_image.width;
-    d_vp.y = input_image.height;
+    d_image.x = input_image.width;
+    d_image.y = input_image.height;
+    d_image.z = NUM_CHANNELS;
+    d_vp.x = velocity_image.width;
+    d_vp.y = velocity_image.height;
     d_vp.z = NUM_CHANNELS;
+    d_itmp.x = input_image.width;
+    d_itmp.y = input_image.height;
+    d_itmp.z = NUM_CHANNELS;
+    d_vtmp.x = velocity_image.width;
+    d_vtmp.y = velocity_image.height;
+    d_vtmp.z = NUM_CHANNELS;
 #endif // USE_CUDA
 
-    // Rescale data to be within the range
+    // Rescale velocity data to be within the range
     for (int x=0; x<vp.x; x++){
         for (int y=0; y<vp.y; y++){
             for (int z=0; z<vp.z; z++){
@@ -153,21 +159,24 @@ int main(int argc, char *argv[]){
         }
     }
 
-    // Calculate device size
-    size_t image_bytes = sizeof(float)*input_image.height*input_image.width*NUM_CHANNELS;
+    // Calculate buffer sizes
+    size_t input_bytes = sizeof(float)*input_image.height*input_image.width*NUM_CHANNELS;
+    size_t velocity_bytes = sizeof(float)*velocity_image.height*velocity_image.width*NUM_CHANNELS;
 
-    // Initialize temporary buffer
-    tmp.data = (float*)malloc(image_bytes);
-    for (int i=0; i<(input_image.height*input_image.width*NUM_CHANNELS); i++){
+    // Initialize temporary buffers
+    itmp.data = (float*)malloc(input_bytes);
+    vtmp.data = (float*)malloc(velocity_bytes);
+    for (int i=0; i<(velocity_image.height*velocity_image.width*NUM_CHANNELS); i++){
         if ((i %4 ) == 3){
-            tmp.data[i] = 1.0;
+            vtmp.data[i] = 1.0;
         }
         else {
-            tmp.data[i] = -1.0;
+            vtmp.data[i] = -1.0;
         }
     }
 #ifdef USE_CUDA
-    cudaMalloc((void**)&(d_tmp.data), image_bytes);
+    cudaMalloc((void**)&(d_itmp.data), input_bytes);
+    cudaMalloc((void**)&(d_vtmp.data), velocity_bytes);
 
     // Set up streams
     for (int i = 0; i < NUM_STREAMS; ++i){
@@ -175,14 +184,14 @@ int main(int argc, char *argv[]){
     }
 
     // Allocate device memory
-    cudaMalloc((void**)&(d_vp.data), image_bytes);
+    cudaMalloc((void**)&(d_vp.data), velocity_bytes);
 
     // Copy memory to the device
-    cudaMemcpy(d_vp.data, vp.data, image_bytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_vp.data, vp.data, velocity_bytes, cudaMemcpyHostToDevice);
 #endif // USE_CUDA
 
     // Debug TODO: condition on debug output
-    std::cout << "Simulating [" << input_image.height << " x " << input_image.width << "] domain for "
+    std::cout << "Simulating [" << velocity_image.height << " x " << velocity_image.width << "] domain for "
         << n_timesteps << " timesteps at dt=" << delta_t << "..." << std::endl;
 
     // Loop through all timesteps
@@ -190,17 +199,24 @@ int main(int argc, char *argv[]){
     for (int i=0; i<n_timesteps; i++){
 #ifdef USE_CUDA
         // Simulate the fluid for a single timestep on the device
-        simulate_fluid_step(&d_vp, &d_tmp, delta_t, viscosity);
+        simulate_fluid_step(&d_vp, &d_vtmp, delta_t, viscosity);
+
+        // Run advection on the color data
+        advect_color_step(&d_image, &d_itmp, &d_vp, delta_t);
 
         // Copy memory back to the host asynchronously  (TODO: Validate that this doesn't corrupt things)
-        cudaMemcpyAsync(vp.data, d_vp.data, image_bytes, cudaMemcpyDeviceToHost, streams[i % NUM_STREAMS]);
+        cudaMemcpyAsync(vp.data, d_vp.data, velocity_bytes, cudaMemcpyDeviceToHost, streams[i % NUM_STREAMS]);
 #else
         // Simulate the fluid for a single timestep
-        simulate_fluid_step(&vp, &tmp, delta_t, viscosity);
+        //std::cout << "STEP[" << i << "]: (" << vp.x << "," << vp.y << "," << vp.z << ") x (" << vtmp.x << "," << vtmp.y << "," << vtmp.z << ")" << std::endl; 
+        simulate_fluid_step(&vp, &vtmp, delta_t, viscosity);
+
+        // Run advection on the color data
+        advect_color_step(&image, &itmp, &vp, delta_t);
 #endif // USE_CUDA
 
         // TODO: Write data to a new output file (don't measure this)
-        write_to_output(&vp, &input_image, i, argv[5]);
+        write_to_output(&image, &input_image, i, argv[6]);
     }
     time_end = std::chrono::high_resolution_clock::now();
     
@@ -214,18 +230,24 @@ int main(int argc, char *argv[]){
 
     // Clean up PNG data
     png_image_free(&input_image);
+    png_image_free(&velocity_image);
 
 #ifdef USE_CUDA
     // Free pinned host memory
+    cudaFreeHost(image.data);
     cudaFreeHost(vp.data);
 
     // Free CUDA memory
+    cudaFree(d_image.data);
     cudaFree(d_vp.data);
-    cudaFree(d_tmp.data);
+    cudaFree(d_itmp.data);
+    cudaFree(d_vtmp.data);
 #else
     // Free memory
+    free(image.data);
     free(vp.data);
-    free(tmp.data);
+    free(itmp.data);
+    free(vtmp.data);
 #endif // USE_CUDA
 
     return 0;
