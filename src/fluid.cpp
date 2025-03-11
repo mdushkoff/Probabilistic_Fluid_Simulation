@@ -9,10 +9,10 @@
 #include "../includes/fluid.hpp"
 
 namespace {
-    int NUM_CHANNELS = 4;
+    //int NUM_CHANNELS = 4;
 
-    inline int asIdx(int i, int j, int k, int height) {
-        return (i * height * NUM_CHANNELS) + (j * NUM_CHANNELS) + k;
+    inline int asIdx(int i, int j, int k, int height, int channels) {
+        return (j * height * channels) + (i * channels) + k;
     }
 
     inline float jacobi(float xl, float xr, float xt, float xb, float alpha, float beta, float b){
@@ -20,8 +20,16 @@ namespace {
     }
 }
 
-void advect(vp_field *vp){
-    // TODO: Perform advection
+void advect(vp_field *vp, vp_field *vp_out){
+    // Perform advection
+    int w = vp->x, h = vp->y, c = vp->z;
+    for (int x=0; x<w; x++){
+        for (int y=0; y<h; y++){
+            for (int z=0; z<c; z++){
+                vp_out->data[asIdx(x, y, z, h, c)] = vp->data[asIdx(x, y, z, h, c)];  // TODO: Perform advection (This is just identity)
+            }
+        }
+    }
 }
 
 void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt){
@@ -42,7 +50,7 @@ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt){
     float alpha = viscosity * dt;
     float beta = 1 + 4 * alpha;
 
-    int w = vp->x, h = vp->y;
+    int w = vp->x, h = vp->y, c = vp->z;
     float *data = vp->data, *data_out = vp_out->data;
     
     // Jacobian iteration on outside to update all spatial dependencies
@@ -56,12 +64,39 @@ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt){
                 // For x and y components of velocity (channels 0 and 1)
                 for (int k = 0; k < 2; k++)
                 {
+                    // Get top, bottom, left, right elements
+                    float left, right, top, bottom;
+                    if (i != 0){
+                        left = data[asIdx(i - 1, j, k, h, c)];
+                    }
+                    else {
+                        left = 0.0; // TODO: Figure out boundary
+                    }
+                    if (i != (w-1)){
+                        right = data[asIdx(i + 1, j, k, h, c)];
+                    }
+                    else {
+                        right = 0.0; // TODO: Figure out boundary
+                    }
+                    if (j != 0){
+                        top = data[asIdx(i, j - 1, k, h, c)];
+                    }
+                    else {
+                        top = 0.0; // TODO: Figure out boundary
+                    }
+                    if (j != (h-1)){
+                        bottom = data[asIdx(i, j + 1, k, h, c)];
+                    }
+                    else {
+                        bottom = 0.0;  // TODO: Figure out boundary
+                    }
+
                     // Solve Laplacian
-                    data_out[asIdx(i, j, k, h)] = jacobi(
-                        data[asIdx(i - 1, j, k, h)],
-                        data[asIdx(i + 1, j, k, h)],
-                        data[asIdx(i, j - 1, k, h)],
-                        data[asIdx(i, j + 1, k, h)],
+                    data_out[asIdx(i, j, k, h, c)] = jacobi(
+                        left,
+                        right,
+                        top,
+                        bottom,
                         alpha, beta, 1.0);
                 }
             }
@@ -71,30 +106,45 @@ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt){
 
 void addForces(vp_field *vp, float *forces){
     // TODO: Perform force addition
+    int w = vp->x, h = vp->y, c = vp->z;
+    for (int x=0; x<w; x++){
+        for (int y=0; y<h; y++){
+            for (int z=0; z<c; z++){
+                
+            }
+        }
+    }
 }
 
-void computePressure(vp_field *vp){
-    // TODO: Perform pressure computation
+void computePressure(vp_field *vp, vp_field *vp_out){
+    // Perform pressure computation
+    int w = vp->x, h = vp->y, c = vp->z;
+    for (int x=0; x<w; x++){
+        for (int y=0; y<h; y++){
+            for (int z=0; z<c; z++){
+                vp_out->data[asIdx(x, y, z, h, c)] = vp->data[asIdx(x, y, z, h, c)]; // TODO: Perform pressure computation (This is just identity)
+            }
+        }
+    }
 }
 
-void subtractPressureGradient(vp_field *vp){
-    // TODO: Perform pressure gradient subtraction
+void subtractPressureGradient(vp_field *vp, vp_field *vp_out){
+    // Perform pressure gradient subtraction
+    int w = vp->x, h = vp->y, c = vp->z;
+    for (int x=0; x<w; x++){
+        for (int y=0; y<h; y++){
+            for (int z=0; z<c; z++){
+                vp_out->data[asIdx(x, y, z, h, c)] = vp->data[asIdx(x, y, z, h, c)]; // TODO: Perform pressure gradient subtraction (This is just identity)
+            }
+        }
+    }
 }
 
-void simulate_fluid_step(vp_field *vp, float dt, float viscosity){
-    // Create temporary buffer for results
-    vp_field vp_out;
-    vp_out.x = vp->x;
-    vp_out.y = vp->y;
-    vp_out.z = vp->z;
-    vp_out.data = (float *)malloc(sizeof(float) * vp_out.x * vp_out.y * vp_out.z);
-
+void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity){
     // Execute operators in order (swapping buffers each step)
-    advect(vp);
-    diffuse(&vp_out, vp, viscosity, dt);
+    advect(vp, tmp);
+    diffuse(tmp, vp, viscosity, dt);
     //addForces(vp_field, forces);  // TODO: eventually add forces
-    computePressure(vp);
-    subtractPressureGradient(vp);
-
-    free(vp_out.data);
+    computePressure(vp, tmp);
+    subtractPressureGradient(tmp, vp);
 }
