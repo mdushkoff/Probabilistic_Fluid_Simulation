@@ -108,7 +108,7 @@ void test_advect() {
         }
     }
 
-    double dt = 0.3; // Small time step
+    double dt = 100; // Small time step
     advect(vp, vp_out, dt);
     print_vp_field(vp_out);
 
