@@ -158,6 +158,14 @@ int main(int argc, char *argv[]){
 
     // Initialize temporary buffer
     tmp.data = (float*)malloc(image_bytes);
+    for (int i=0; i<(input_image.height*input_image.width*NUM_CHANNELS); i++){
+        if ((i %4 ) == 3){
+            tmp.data[i] = 1.0;
+        }
+        else {
+            tmp.data[i] = -1.0;
+        }
+    }
 #ifdef USE_CUDA
     cudaMalloc((void**)&(d_tmp.data), image_bytes);
 

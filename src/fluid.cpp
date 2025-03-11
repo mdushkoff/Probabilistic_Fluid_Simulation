@@ -27,25 +27,29 @@ void advect(vp_field *vp, vp_field *vp_out, double dt){
     float *field = vp->data;
     float *new_field = vp_out->data;
 
+    // Store floating point constants
+    float fwidth = (float)width;
+    float fheight = (float)height;
+
     for (int j = 1; j < height - 1; j++) {
         for (int i = 1; i < width - 1; i++) { // Iterate through the inner part in the grid
             int x_idx = asIdx(i, j, 0, width, depth); // Cell index for x
             int y_idx = asIdx(i, j, 1, width, depth); // Cell index for y
 
-            float x_prev = i - dt * field[x_idx] / width; // Compute the where the fluid came from at the previous time stamp // Divided by h so can convert velocity into grid units
+            float x_prev = (float)i - dt * field[x_idx] / fwidth; // Compute the where the fluid came from at the previous time stamp // Divided by h so can convert velocity into grid units
             // Offset index to get velocity in y direction
-            float y_prev = j - dt * field[y_idx] / height;
+            float y_prev = (float)j - dt * field[y_idx] / fheight;
 
-            x_prev = std::max(0.5f, std::min<float>(width - 1.5, x_prev)); // Get the center of cooridinates and prevent out-of-bounds errors
-            y_prev = std::max(0.5f, std::min<float>(height - 1.5, y_prev));
+            x_prev = std::max(0.5f, std::min<float>(fwidth - 1.5, x_prev)); // Get the center of cooridinates and prevent out-of-bounds errors
+            y_prev = std::max(0.5f, std::min<float>(fheight - 1.5, y_prev));
 
             int i0 = int(x_prev), j0 = int(y_prev);
             int i1 = i0 + 1, j1 = j0 + 1; // Find the integer grid coordinates surrounding (x, y)
-            float sx = x_prev - i0, sy = y_prev - j0; // Represent the fractional distances from (i0, j0)
+            float sx = x_prev - (float)i0, sy = y_prev - (float)j0; // Represent the fractional distances from (i0, j0)
 
             // Bilinear Interpolation
             for (int vel_dir = 0; vel_dir < 2; vel_dir++) {
-                new_field[asIdx(i, j, vel_dir, height, depth)] = 
+                new_field[asIdx(i, j, vel_dir, width, depth)] = 
                     (1 - sx) * (1 - sy) * field[asIdx(i0, j0, vel_dir, width, depth)] +
                     sx * (1 - sy) * field[asIdx(i1, j0, vel_dir, width, depth)] +
                     (1 - sx) * sy * field[asIdx(i0, j1, vel_dir, width, depth)] +
@@ -89,30 +93,10 @@ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt){
                 {
                     // Get top, bottom, left, right elements
                     float left, right, top, bottom;
-                    if (i != 0){
-                        left = data[asIdx(i - 1, j, k, w, c)];
-                    }
-                    else {
-                        left = 0.0; // TODO: Figure out boundary
-                    }
-                    if (i != (w-1)){
-                        right = data[asIdx(i + 1, j, k, w, c)];
-                    }
-                    else {
-                        right = 0.0; // TODO: Figure out boundary
-                    }
-                    if (j != 0){
-                        top = data[asIdx(i, j - 1, k, w, c)];
-                    }
-                    else {
-                        top = 0.0; // TODO: Figure out boundary
-                    }
-                    if (j != (h-1)){
-                        bottom = data[asIdx(i, j + 1, k, w, c)];
-                    }
-                    else {
-                        bottom = 0.0;  // TODO: Figure out boundary
-                    }
+                    left = (i != 0) ? data[asIdx(i - 1, j, k, w, c)] : 0.0; // TODO: Figure out boundary
+                    right = (i != (w-1)) ? data[asIdx(i + 1, j, k, w, c)] : 0.0; // TODO: Figure out boundary
+                    top = (j != 0) ? data[asIdx(i, j - 1, k, w, c)] : 0.0; // TODO: Figure out boundary
+                    bottom = (j != (h-1)) ? data[asIdx(i, j + 1, k, w, c)] : 0.0; // TODO: Figure out boundary
 
                     // Solve Laplacian
                     data_out[asIdx(i, j, k, w, c)] = jacobi(
@@ -179,13 +163,14 @@ void computePressure(vp_field *vp, vp_field *vp_out){
 
                 vp_out->data[asIdx(i, j, 2, w, d)] = jacobi(pL, pR, pT, pB, alpha, beta, b);
             }
+        }
 
-        } 
-
-        if (iter < NUM_JACOBI_ITERS - 1) {
+        // Swap buffers
+        if (iter < (NUM_JACOBI_ITERS - 1)) {
             float* tp = vp_out->data;
-            vp_out->data = data_in;
-            data_in = tp;
+            vp_out->data = vp->data;
+            vp->data = tp;
+            data_in = vp->data;
         }
     }
 }
@@ -209,105 +194,11 @@ void subtractPressureGradient(vp_field *vp, vp_field *vp_out) {
             float gradY = (pB - pT)/2.0f;
 
             // Subtract the gradient from velocity
-            vp_out->data[asIdx(i, j, 0, w, d)] = *data_in - gradX;
-            vp_out->data[asIdx(i, j, 1, w, d)] = *data_in - gradY;
+            vp_out->data[asIdx(i, j, 0, w, d)] = data_in[asIdx(i, j, 0, w, d)] - gradX;
+            vp_out->data[asIdx(i, j, 1, w, d)] = data_in[asIdx(i, j, 0, w, d)] - gradY;
         }
     }
 }
-
-/*void test_computePressure() {
-    // Define grid size
-    vp_field test_field;
-    test_field.x = 3; 
-    test_field.y = 3; 
-    test_field.z = 4;
-    int size = test_field.x * test_field.y * test_field.z;
-    test_field.data = new float[size];
-
-    vp_field *newPressure = new vp_field;
-    newPressure->x = test_field.x;
-    newPressure->y = test_field.y;
-    newPressure->z = test_field.z;
-    newPressure->data = new float[size];
-    
-
-    // Initialize all values to zero
-    for (int i = 0; i < size; i++) {
-        test_field.data[i] = 0.0f;
-    }
-
-    // Set initial velocity field (channels 0 and 1)
-    for (int i = 0; i < test_field.x; i++) {
-        for (int j = 0; j < test_field.y; j++) {
-            test_field.data[asIdx(i, j, 0, test_field.x, test_field.z)] = 1.0f;
-            test_field.data[asIdx(i, j, 1, test_field.x, test_field.z)] = 1.0f;
-            test_field.data[asIdx(i, j, 2, test_field.x, test_field.z)] = 1.0f;
-        }
-    }
-
-    computePressure(&test_field, newPressure);
-
-    std::cout << "Computed Pressure Values:" << std::endl;
-    for (int j = 0; j < newPressure->y; ++j) {
-        for (int i = 0; i < newPressure->x; ++i) {
-            float pressure = newPressure->data[asIdx(i, j, 2, newPressure->x, newPressure->z)];
-            std::cout << pressure << " ";
-        }
-        std::cout << std::endl;
-    }
-    std::cout << std::endl;
-}
-
-void test_subtractPressureGradient() {
-    // Define grid size
-    vp_field test_field;
-    test_field.x = 2; 
-    test_field.y = 2; 
-    test_field.z = 4;
-    int size = test_field.x * test_field.y * test_field.z;
-    test_field.data = new float[size];
-
-    vp_field *res_field = new vp_field;
-    res_field->x = test_field.x;
-    res_field->y = test_field.y;
-    res_field->z = test_field.z;
-    res_field->data = new float[size];
-    
-
-    // Initialize all values to zero
-    for (int i = 0; i < size; i++) {
-        test_field.data[i] = 0.0f;
-    }
-
-    // Set initial velocity field (channels 0 and 1)
-    for (int j = 0; j < test_field.y; j++) {
-        for (int i = 0; i < test_field.x; i++) {
-            test_field.data[asIdx(i, j, 0, test_field.x, test_field.z)] = 1.0f;
-            test_field.data[asIdx(i, j, 1, test_field.x, test_field.z)] = 1.0f;
-            test_field.data[asIdx(i, j, 2, test_field.x, test_field.z)] = 1.0f;
-        }
-    }
-
-    subtractPressureGradient(&test_field, res_field);
-
-    std::cout << "Computed Pressure Values:" << std::endl;
-    for (int j = 0; j < res_field->y; ++j) {
-        for (int i = 0; i < res_field->x; ++i) {
-            std::cout << "[";
-            for (int z = 0; z < res_field->z; ++z) {
-                std::cout << res_field->data[asIdx(i, j, z, res_field->x, res_field->z)] << ", ";
-            }
-            std::cout << "]\t";
-        }
-        std::cout << std::endl;
-    }
-    std::cout << std::endl;
-
-    // Clean up memory
-    delete[] test_field.data;
-    delete[] res_field->data;
-    delete res_field;
-}*/
 
 void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity){
     // Execute operators in order (swapping buffers each step)
