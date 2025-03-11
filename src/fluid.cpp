@@ -12,8 +12,8 @@
 namespace {
     //int NUM_CHANNELS = 4;
 
-    inline int asIdx(int i, int j, int k, int height, int channels) {
-        return (j * height * channels) + (i * channels) + k;
+    inline int asIdx(int i, int j, int k, int width, int channels) {
+        return (j * width * channels) + (i * channels) + k;
     }
 
     inline float jacobi(float xl, float xr, float xt, float xb, float alpha, float beta, float b){
@@ -90,32 +90,32 @@ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt){
                     // Get top, bottom, left, right elements
                     float left, right, top, bottom;
                     if (i != 0){
-                        left = data[asIdx(i - 1, j, k, h, c)];
+                        left = data[asIdx(i - 1, j, k, w, c)];
                     }
                     else {
                         left = 0.0; // TODO: Figure out boundary
                     }
                     if (i != (w-1)){
-                        right = data[asIdx(i + 1, j, k, h, c)];
+                        right = data[asIdx(i + 1, j, k, w, c)];
                     }
                     else {
                         right = 0.0; // TODO: Figure out boundary
                     }
                     if (j != 0){
-                        top = data[asIdx(i, j - 1, k, h, c)];
+                        top = data[asIdx(i, j - 1, k, w, c)];
                     }
                     else {
                         top = 0.0; // TODO: Figure out boundary
                     }
                     if (j != (h-1)){
-                        bottom = data[asIdx(i, j + 1, k, h, c)];
+                        bottom = data[asIdx(i, j + 1, k, w, c)];
                     }
                     else {
                         bottom = 0.0;  // TODO: Figure out boundary
                     }
 
                     // Solve Laplacian
-                    data_out[asIdx(i, j, k, h, c)] = jacobi(
+                    data_out[asIdx(i, j, k, w, c)] = jacobi(
                         left,
                         right,
                         top,
@@ -160,10 +160,10 @@ void computePressure(vp_field *vp, vp_field *vp_out){
     // Compute divergence and store it in D
     for (int i = 0; i < w; i++) {
         for (int j = 0; j < h; j++) {            
-            float uR = (i < w - 1 ? data_in[asIdx(i + 1, j, 0, w)] : 0.0f) - (i > 0 ? data_in[asIdx(i - 1, j, 0, w)] : 0.0f);
-            float vT = (j < h - 1 ? data_in[asIdx(i, j + 1, 1, w)] : 0.0f) - (j > 0 ? data_in[asIdx(i, j - 1, 1, w)] : 0.0f);
+            float uR = (i < w - 1 ? data_in[asIdx(i + 1, j, 0, w, d)] : 0.0f) - (i > 0 ? data_in[asIdx(i - 1, j, 0, w, d)] : 0.0f);
+            float vT = (j < h - 1 ? data_in[asIdx(i, j + 1, 1, w, d)] : 0.0f) - (j > 0 ? data_in[asIdx(i, j - 1, 1, w, d)] : 0.0f);
             
-            data_in[asIdx(i, j, 3, w)] = 0.5f * (uR + vT);
+            data_in[asIdx(i, j, 3, w, d)] = 0.5f * (uR + vT);
         }
     }
     
@@ -171,13 +171,13 @@ void computePressure(vp_field *vp, vp_field *vp_out){
         for (int i = 0; i < w; i++) {
             for (int j = 0; j < h; j++) {
                 // Pressure Values
-                float pL = (i > 0     ? data_in[asIdx(i - 1, j, 2, w)] : 0.0f);
-                float pR = (i < w - 1 ? data_in[asIdx(i + 1, j, 2, w)] : 0.0f);
-                float pT = (j > 0     ? data_in[asIdx(i, j - 1, 2, w)] : 0.0f);
-                float pB = (j < h - 1 ? data_in[asIdx(i, j + 1, 2, w)] : 0.0f);
-                float b = data_in[asIdx(i, j, 3, w)];
+                float pL = (i > 0     ? data_in[asIdx(i - 1, j, 2, w, d)] : 0.0f);
+                float pR = (i < w - 1 ? data_in[asIdx(i + 1, j, 2, w, d)] : 0.0f);
+                float pT = (j > 0     ? data_in[asIdx(i, j - 1, 2, w, d)] : 0.0f);
+                float pB = (j < h - 1 ? data_in[asIdx(i, j + 1, 2, w, d)] : 0.0f);
+                float b = data_in[asIdx(i, j, 3, w, d)];
 
-                vp_out->data[asIdx(i, j, 2, w)] = jacobi(pL, pR, pT, pB, alpha, beta, b);
+                vp_out->data[asIdx(i, j, 2, w, d)] = jacobi(pL, pR, pT, pB, alpha, beta, b);
             }
 
         } 
@@ -199,23 +199,23 @@ void subtractPressureGradient(vp_field *vp, vp_field *vp_out) {
     for (int i = 0; i < w; i++) {
         for (int j = 0; j < h; j++) {
             // Compute pressure differences (gradient)
-            float pR = (i < w - 1) ? data_in[asIdx(i + 1, j, 2, w)] : 0.0f;
-            float pL = (i > 0) ? data_in[asIdx(i - 1, j, 2, w)] : 0.0f;
-            float pB = (j < h - 1) ? data_in[asIdx(i, j + 1, 2, w)] : 0.0f;
-            float pT = (j > 0) ? data_in[asIdx(i, j - 1, 2, w)] : 0.0f;
+            float pR = (i < w - 1) ? data_in[asIdx(i + 1, j, 2, w, d)] : 0.0f;
+            float pL = (i > 0) ? data_in[asIdx(i - 1, j, 2, w, d)] : 0.0f;
+            float pB = (j < h - 1) ? data_in[asIdx(i, j + 1, 2, w, d)] : 0.0f;
+            float pT = (j > 0) ? data_in[asIdx(i, j - 1, 2, w, d)] : 0.0f;
 
             // Compute gradient components
             float gradX = (pR - pL)/2.0f;
             float gradY = (pB - pT)/2.0f;
 
             // Subtract the gradient from velocity
-            vp_out->data[asIdx(i, j, 0, w)] = *data_in - gradX;
-            vp_out->data[asIdx(i, j, 1, w)] = *data_in - gradY;
+            vp_out->data[asIdx(i, j, 0, w, d)] = *data_in - gradX;
+            vp_out->data[asIdx(i, j, 1, w, d)] = *data_in - gradY;
         }
     }
 }
 
-void test_computePressure() {
+/*void test_computePressure() {
     // Define grid size
     vp_field test_field;
     test_field.x = 3; 
@@ -239,9 +239,9 @@ void test_computePressure() {
     // Set initial velocity field (channels 0 and 1)
     for (int i = 0; i < test_field.x; i++) {
         for (int j = 0; j < test_field.y; j++) {
-            test_field.data[asIdx(i, j, 0, test_field.y)] = 1.0f;
-            test_field.data[asIdx(i, j, 1, test_field.y)] = 1.0f;
-            test_field.data[asIdx(i, j, 2, test_field.y)] = 1.0f;
+            test_field.data[asIdx(i, j, 0, test_field.x, test_field.z)] = 1.0f;
+            test_field.data[asIdx(i, j, 1, test_field.x, test_field.z)] = 1.0f;
+            test_field.data[asIdx(i, j, 2, test_field.x, test_field.z)] = 1.0f;
         }
     }
 
@@ -250,7 +250,7 @@ void test_computePressure() {
     std::cout << "Computed Pressure Values:" << std::endl;
     for (int j = 0; j < newPressure->y; ++j) {
         for (int i = 0; i < newPressure->x; ++i) {
-            float pressure = newPressure->data[asIdx(i, j, 2, newPressure->y)];
+            float pressure = newPressure->data[asIdx(i, j, 2, newPressure->x, newPressure->z)];
             std::cout << pressure << " ";
         }
         std::cout << std::endl;
@@ -282,9 +282,9 @@ void test_subtractPressureGradient() {
     // Set initial velocity field (channels 0 and 1)
     for (int j = 0; j < test_field.y; j++) {
         for (int i = 0; i < test_field.x; i++) {
-            test_field.data[asIdx(i, j, 0, test_field.x)] = 1.0f;
-            test_field.data[asIdx(i, j, 1, test_field.x)] = 1.0f;
-            test_field.data[asIdx(i, j, 2, test_field.x)] = 1.0f;
+            test_field.data[asIdx(i, j, 0, test_field.x, test_field.z)] = 1.0f;
+            test_field.data[asIdx(i, j, 1, test_field.x, test_field.z)] = 1.0f;
+            test_field.data[asIdx(i, j, 2, test_field.x, test_field.z)] = 1.0f;
         }
     }
 
@@ -295,7 +295,7 @@ void test_subtractPressureGradient() {
         for (int i = 0; i < res_field->x; ++i) {
             std::cout << "[";
             for (int z = 0; z < res_field->z; ++z) {
-                std::cout << res_field->data[asIdx(i, j, z, res_field->y)] << ", ";
+                std::cout << res_field->data[asIdx(i, j, z, res_field->x, res_field->z)] << ", ";
             }
             std::cout << "]\t";
         }
@@ -307,7 +307,7 @@ void test_subtractPressureGradient() {
     delete[] test_field.data;
     delete[] res_field->data;
     delete res_field;
-}
+}*/
 
 void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity){
     // Execute operators in order (swapping buffers each step)
