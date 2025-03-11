@@ -4,6 +4,7 @@
  */
 
 // System Includes
+#include <boost/filesystem.hpp>
 #include <chrono>
 #include <iostream>
 #include <math.h>
@@ -22,7 +23,7 @@
 
 // Definitions
 #define NUM_CHANNELS (4)
-#define VP_RANGE (10.0)
+#define VP_RANGE (2.0)
 
 // Conditional Definitions
 #ifdef USE_CUDA
@@ -40,6 +41,46 @@ void usage(char *prog){
     std::cerr << "Usage: " << prog << " <n_timesteps> <delta_t> <viscosity> <initial_field> <output_dir>" << std::endl;
 }
 
+/*
+ * Write an output to the results directory.
+ *
+ * Inputs:
+ *     vp -  A 3D array representing the current velocity/pressure values
+ *     output_image - A reference to a png_image structure
+ *     i - The current iteration number
+ *     dir - The output directory
+ */
+void write_to_output(vp_field *vp, png_image *output_image, int i, char *dir){
+    // Copy data to a temporary buffer and normalize it
+    int w = vp->x;
+    int h = vp->y;
+    int c = vp->z;
+    size_t image_bytes = sizeof(float)*h*w*c;
+    float *out = (float*)malloc(image_bytes);
+    memcpy(out, vp->data, image_bytes);
+
+    // Normalize the output array
+    for (int x=0; x<w; x++){
+        for (int y=0; y<h; y++){
+            for (int z=0; z<c; z++){
+                int idx = y*h*c+x*c+z;
+                out[idx] = (out[idx] + VP_RANGE/2.0) / VP_RANGE;
+            }
+        }
+    }
+
+    // Write data to a png file
+    std::string ext(".png");
+    boost::filesystem::path base(dir);
+    boost::filesystem::path fn(std::to_string(i) + ext);
+    boost::filesystem::path outpath = base / fn;
+    std::cout << "[" << i << "] Writing to : " << outpath.c_str() << std::endl;
+    write_png_from_array(output_image, outpath.c_str(), &out);
+
+    // Free memory
+    free(out);
+}
+
 int main(int argc, char *argv[]){
     // Timing variables
     std::chrono::high_resolution_clock::time_point time_start;
@@ -51,10 +92,12 @@ int main(int argc, char *argv[]){
 
     // Image data
     vp_field vp;  // 2D velocity + pressure field (RG,B)
+    vp_field tmp; // Temporary buffer
 
 #ifdef USE_CUDA
     // Device data
     vp_field d_vp;  // 2D Velocity + pressure field (RG,B) on device memory
+    vp_field d_tmp; // Temporary buffer on device memory
 
     // Streams
     cudaStream_t streams[NUM_STREAMS];
@@ -90,6 +133,9 @@ int main(int argc, char *argv[]){
     vp.x = input_image.width;
     vp.y = input_image.height;
     vp.z = NUM_CHANNELS;
+    tmp.x = input_image.width;
+    tmp.y = input_image.height;
+    tmp.z = NUM_CHANNELS;
 #ifdef USE_CUDA
     d_vp.x = input_image.width;
     d_vp.y = input_image.height;
@@ -107,14 +153,26 @@ int main(int argc, char *argv[]){
         }
     }
 
+    // Calculate device size
+    size_t image_bytes = sizeof(float)*input_image.height*input_image.width*NUM_CHANNELS;
+
+    // Initialize temporary buffer
+    tmp.data = (float*)malloc(image_bytes);
+    for (int i=0; i<(input_image.height*input_image.width*NUM_CHANNELS); i++){
+        if ((i %4 ) == 3){
+            tmp.data[i] = 1.0;
+        }
+        else {
+            tmp.data[i] = -1.0;
+        }
+    }
 #ifdef USE_CUDA
+    cudaMalloc((void**)&(d_tmp.data), image_bytes);
+
     // Set up streams
     for (int i = 0; i < NUM_STREAMS; ++i){
         cudaStreamCreate(&streams[i]);
     }
-
-    // Calculate device size
-    size_t image_bytes = sizeof(float)*input_image.height*input_image.width*NUM_CHANNELS;
 
     // Allocate device memory
     cudaMalloc((void**)&(d_vp.data), image_bytes);
@@ -132,17 +190,17 @@ int main(int argc, char *argv[]){
     for (int i=0; i<n_timesteps; i++){
 #ifdef USE_CUDA
         // Simulate the fluid for a single timestep on the device
-        simulate_fluid_step(&d_vp, delta_t, viscosity);
+        simulate_fluid_step(&d_vp, &d_tmp, delta_t, viscosity);
 
         // Copy memory back to the host asynchronously  (TODO: Validate that this doesn't corrupt things)
         cudaMemcpyAsync(vp.data, d_vp.data, image_bytes, cudaMemcpyDeviceToHost, streams[i % NUM_STREAMS]);
 #else
         // Simulate the fluid for a single timestep
-        simulate_fluid_step(&vp, delta_t, viscosity);
+        simulate_fluid_step(&vp, &tmp, delta_t, viscosity);
 #endif // USE_CUDA
 
         // TODO: Write data to a new output file (don't measure this)
-
+        write_to_output(&vp, &input_image, i, argv[5]);
     }
     time_end = std::chrono::high_resolution_clock::now();
     
@@ -163,9 +221,11 @@ int main(int argc, char *argv[]){
 
     // Free CUDA memory
     cudaFree(d_vp.data);
+    cudaFree(d_tmp.data);
 #else
     // Free memory
     free(vp.data);
+    free(tmp.data);
 #endif // USE_CUDA
 
     return 0;
