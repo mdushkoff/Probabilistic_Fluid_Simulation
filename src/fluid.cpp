@@ -38,8 +38,8 @@ void computePressure(vp_field *vp, vp_field *vp_out){
     int w = vp->x, h = vp->y, d = vp->z;
     float *data_in = vp->data;
     
-    memcpy(vp_out->data, data_in, sizeof(float) * w * h * d);
-    float *p_new  = (float *)malloc(sizeof(float) * w * h * d);
+    // memcpy(vp_out->data, data_in, sizeof(float) * w * h * d);
+    // float *p_new  = (float *)malloc(sizeof(float) * w * h * d);
     
     float alpha = -1.0f;
     float beta = 4.0f;
@@ -48,10 +48,10 @@ void computePressure(vp_field *vp, vp_field *vp_out){
     // Compute divergence and store it in D
     for (int i = 0; i < w; i++) {
         for (int j = 0; j < h; j++) {            
-            float uR = (i < w - 1 ? vp_out->data[asIdx(i + 1, j, 0, w)] : 0.0f) - (i > 0 ? vp_out->data[asIdx(i - 1, j, 0, w)] : 0.0f);
-            float vT = (j < h - 1 ? vp_out->data[asIdx(i, j + 1, 1, w)] : 0.0f) - (j > 0 ? vp_out->data[asIdx(i, j - 1, 1, w)] : 0.0f);
+            float uR = (i < w - 1 ? data_in[asIdx(i + 1, j, 0, w)] : 0.0f) - (i > 0 ? data_in[asIdx(i - 1, j, 0, w)] : 0.0f);
+            float vT = (j < h - 1 ? data_in[asIdx(i, j + 1, 1, w)] : 0.0f) - (j > 0 ? data_in[asIdx(i, j - 1, 1, w)] : 0.0f);
             
-            vp_out->data[asIdx(i, j, 3, w)] = 0.5f * (uR + vT);
+            data_in[asIdx(i, j, 3, w)] = 0.5f * (uR + vT);
         }
     }
     
@@ -59,32 +59,38 @@ void computePressure(vp_field *vp, vp_field *vp_out){
         for (int i = 0; i < w; i++) {
             for (int j = 0; j < h; j++) {
                 // Pressure Values
-                float pL = (i > 0     ? vp_out->data[asIdx(i - 1, j, 2, w)] : 0.0f);
-                float pR = (i < w - 1 ? vp_out->data[asIdx(i + 1, j, 2, w)] : 0.0f);
-                float pT = (j > 0     ? vp_out->data[asIdx(i, j - 1, 2, w)] : 0.0f);
-                float pB = (j < h - 1 ? vp_out->data[asIdx(i, j + 1, 2, w)] : 0.0f);
-                float b = vp_out->data[asIdx(i, j, 3, w)];
+                float pL = (i > 0     ? data_in[asIdx(i - 1, j, 2, w)] : 0.0f);
+                float pR = (i < w - 1 ? data_in[asIdx(i + 1, j, 2, w)] : 0.0f);
+                float pT = (j > 0     ? data_in[asIdx(i, j - 1, 2, w)] : 0.0f);
+                float pB = (j < h - 1 ? data_in[asIdx(i, j + 1, 2, w)] : 0.0f);
+                float b = data_in[asIdx(i, j, 3, w)];
 
-                p_new[asIdx(i, j, 2, w)] = jacobi(pL, pR, pT, pB, alpha, beta, b);
+                vp_out->data[asIdx(i, j, 2, w)] = jacobi(pL, pR, pT, pB, alpha, beta, b);
             }
 
         } 
-        // Copy back new pressure values to the original data array
-        for (int i = 0; i < w; i++) {
-            for (int j = 0; j < h; j++) {
-                int idx = asIdx(i, j, 2, w);
-                vp_out->data[idx] = p_new[idx];
-            }
+
+        if (iter < NUM_JACOBI_ITERS - 1) {
+            float* tp = vp_out->data;
+            vp_out->data = data_in;
+            data_in = tp;
         }
+        // Copy back new pressure values to the original data array
+        // for (int i = 0; i < w; i++) {
+        //     for (int j = 0; j < h; j++) {
+        //         int idx = asIdx(i, j, 2, w);
+        //         vp_out->data[idx] = p_new[idx];
+        //     }
+        // }
     }
-    free(p_new);
+    // free(p_new);
 }
 
 void subtractPressureGradient(vp_field *vp, vp_field *vp_out) {
     int w = vp->x, h = vp->y, d = vp->z;
     float *data_in = vp->data;
 
-    memcpy(vp_out->data, data_in, sizeof(float) * w * h * d);
+    // memcpy(vp_out->data, data_in, sizeof(float) * w * h * d);
 
     for (int i = 0; i < w; i++) {
         for (int j = 0; j < h; j++) {
@@ -99,8 +105,8 @@ void subtractPressureGradient(vp_field *vp, vp_field *vp_out) {
             float gradY = (pB - pT)/2.0f;
 
             // Subtract the gradient from velocity
-            vp_out->data[asIdx(i, j, 0, w)] -= gradX;
-            vp_out->data[asIdx(i, j, 1, w)] -= gradY;
+            vp_out->data[asIdx(i, j, 0, w)] = *data_in - gradX;
+            vp_out->data[asIdx(i, j, 1, w)] = *data_in - gradY;
         }
     }
 }
@@ -157,9 +163,9 @@ void test_computePressure() {
     std::cout << std::endl;
 
     // Clean up memory
-    delete[] test_field.data;
-    delete[] newPressure->data;
-    delete newPressure;
+    // delete[] test_field.data;
+    // delete[] newPressure->data;
+    // delete newPressure;
 }
 
 void test_subtractPressureGradient() {
