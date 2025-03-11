@@ -23,7 +23,7 @@
 
 // Definitions
 #define NUM_CHANNELS (4)
-#define VP_RANGE (10.0)
+#define VP_RANGE (2.0)
 
 // Conditional Definitions
 #ifdef USE_CUDA
@@ -58,12 +58,6 @@ void write_to_output(vp_field *vp, png_image *output_image, int i, char *dir){
     size_t image_bytes = sizeof(float)*h*w*c;
     float *out = (float*)malloc(image_bytes);
     memcpy(out, vp->data, image_bytes);
-
-    // Create output image structure
-    /*png_image output_image;
-    output_image.width = w;
-    output_image.height = h;*/
-    //output_image.format = PNG_FORMAT_RGBA;
 
     // Normalize the output array
     for (int x=0; x<w; x++){

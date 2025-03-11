@@ -48,7 +48,7 @@ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt){
     //         (spatial dependencies require nudging toward solution)
 
     float alpha = viscosity * dt;
-    float beta = 1 + 4 * alpha;
+    float beta = 1.0 + 4.0 * alpha;
 
     int w = vp->x, h = vp->y, c = vp->z;
     float *data = vp->data, *data_out = vp_out->data;
