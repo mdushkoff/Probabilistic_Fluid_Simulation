@@ -61,7 +61,7 @@ void addForces(vp_field *vp, float *forces);
 #ifdef USE_CUDA
 __global__
 #endif // USE_CUDA
-void computePressure(vp_field *vp);
+void computePressure(vp_field *vp, vp_field *vp_out);
 
 /*
  * Inputs:
@@ -83,6 +83,6 @@ void subtractPressureGradient(vp_field *vp);
  *     dt - The simulation time step resolution
  *     viscosity - The viscosity of the fluid
  */
-void simulate_fluid_step(vp_field *vp, float dt, float viscosity);
+void simulate_fluid_step(vp_field *vp, vp_field *vp_out, float dt, float viscosity);
 
 #endif // FLUID_HPP_
