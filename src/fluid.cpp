@@ -155,15 +155,20 @@ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt){
         {
             for (int j = 0; j < h; j++)
             {
+                // Calculate wrapped indices
+                int iminus = ((i-1) % w + w) % w;
+                int iplus = (i+1) % w;
+                int jminus = ((j-1) % h + h) % h;
+                int jplus = (j+1) % h;
+
                 // For x and y components of velocity (channels 0 and 1)
                 for (int k = 0; k < 2; k++)
                 {
                     // Get top, bottom, left, right elements
-                    float left, right, top, bottom;
-                    left = (i != 0) ? data[asIdx(i - 1, j, k, w, c)] : 0.0; // TODO: Figure out boundary
-                    right = (i != (w-1)) ? data[asIdx(i + 1, j, k, w, c)] : 0.0; // TODO: Figure out boundary
-                    top = (j != 0) ? data[asIdx(i, j - 1, k, w, c)] : 0.0; // TODO: Figure out boundary
-                    bottom = (j != (h-1)) ? data[asIdx(i, j + 1, k, w, c)] : 0.0; // TODO: Figure out boundary
+                    float left = data[asIdx(iminus, j, k, w, c)];
+                    float right = data[asIdx(iplus, j, k, w, c)];
+                    float top = data[asIdx(i, jminus, k, w, c)];
+                    float bottom = data[asIdx(i, jplus, k, w, c)];
                     float u_n = data[asIdx(i, j, k, w, c)];
 
                     // Solve Laplacian
@@ -180,11 +185,13 @@ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt){
         }
 
         // Swap buffers
-        float *tp = vp_out->data;
-        vp_out->data = vp->data;
-        vp->data = tp;
-        data = vp->data;
-        data_out = vp_out->data;
+        if (iter != (NUM_JACOBI_ITERS - 1)){  // Needed to prevent last iteration swap
+            float *tp = vp_out->data;
+            vp_out->data = vp->data;
+            vp->data = tp;
+            data = vp->data;
+            data_out = vp_out->data;
+        }
     }
 }
 
@@ -222,26 +229,34 @@ void computePressure(vp_field *vp, vp_field *vp_out){
     for (int iter = 0; iter < NUM_JACOBI_ITERS; iter++) {
         for (int i = 0; i < w; i++) {
             for (int j = 0; j < h; j++) {
+                // Calculate wrapped indices
+                int iminus = ((i-1) % w + w) % w;
+                int iplus = (i+1) % w;
+                int jminus = ((j-1) % h + h) % h;
+                int jplus = (j+1) % h;
+
                 // Compute divergence
-                float uR = (i < w - 1 ? data_in[asIdx(i + 1, j, 0, w, d)] : 0.0f) - (i > 0 ? data_in[asIdx(i - 1, j, 0, w, d)] : 0.0f);
-                float vT = (j < h - 1 ? data_in[asIdx(i, j + 1, 1, w, d)] : 0.0f) - (j > 0 ? data_in[asIdx(i, j - 1, 1, w, d)] : 0.0f);
+                float uR = data_in[asIdx(iplus, j, 0, w, d)] - data_in[asIdx(iminus, j, 0, w, d)];
+                float vT = data_in[asIdx(i, jplus, 1, w, d)] - data_in[asIdx(i, jminus, 1, w, d)];
             
                 // Pressure Values
-                float pL = (i > 0     ? data_in[asIdx(i - 1, j, 2, w, d)] : 0.0f);
-                float pR = (i < w - 1 ? data_in[asIdx(i + 1, j, 2, w, d)] : 0.0f);
-                float pT = (j > 0     ? data_in[asIdx(i, j - 1, 2, w, d)] : 0.0f);
-                float pB = (j < h - 1 ? data_in[asIdx(i, j + 1, 2, w, d)] : 0.0f);
-                float b = 0.5f * (uR + vT);;
+                float pL = data_in[asIdx(iminus, j, 2, w, d)];
+                float pR = data_in[asIdx(iplus, j, 2, w, d)];
+                float pT = data_in[asIdx(i, jminus, 2, w, d)];
+                float pB = data_in[asIdx(i, jplus, 2, w, d)];
+                float b = 0.5f * (uR + vT);
 
                 vp_out->data[asIdx(i, j, 2, w, d)] = jacobi(pL, pR, pT, pB, alpha, beta, b);
             }
         }
 
         // Swap buffers
-        float* tp = vp_out->data;
-        vp_out->data = vp->data;
-        vp->data = tp;
-        data_in = vp->data;
+        if (iter != (NUM_JACOBI_ITERS - 1)){ // Needed to prevent last iteration swap
+            float* tp = vp_out->data;
+            vp_out->data = vp->data;
+            vp->data = tp;
+            data_in = vp->data;
+        }
     }
 }
 
@@ -251,11 +266,17 @@ void subtractPressureGradient(vp_field *vp, vp_field *vp_out) {
 
     for (int i = 0; i < w; i++) {
         for (int j = 0; j < h; j++) {
+            // Calculate wrapped indices
+            int iminus = ((i-1) % w + w) % w;
+            int iplus = (i+1) % w;
+            int jminus = ((j-1) % h + h) % h;
+            int jplus = (j+1) % h;
+
             // Compute pressure differences (gradient)
-            float pR = (i < w - 1) ? data_in[asIdx(i + 1, j, 2, w, d)] : 0.0f;
-            float pL = (i > 0) ? data_in[asIdx(i - 1, j, 2, w, d)] : 0.0f;
-            float pB = (j < h - 1) ? data_in[asIdx(i, j + 1, 2, w, d)] : 0.0f;
-            float pT = (j > 0) ? data_in[asIdx(i, j - 1, 2, w, d)] : 0.0f;
+            float pL = data_in[asIdx(iminus, j, 2, w, d)];
+            float pR = data_in[asIdx(iplus, j, 2, w, d)];
+            float pT = data_in[asIdx(i, jminus, 2, w, d)];
+            float pB = data_in[asIdx(i, jplus, 2, w, d)];
 
             // Compute gradient components
             float gradX = (pR - pL)/2.0f;
