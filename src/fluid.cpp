@@ -207,24 +207,34 @@ void addForces(vp_field *vp, float *forces){
     }
 }
 
-void computePressure(vp_field *vp, vp_field *vp_out){
+void computePressure(vp_field *vp, vp_field *vp_out, float dt){
     // Perform pressure computation
     int w = vp->x, h = vp->y, d = vp->z;
     float *data_in = vp->data;
     
-    float alpha = -1.0f;
+    float alpha = 1.0f;  // Adjusted due to gamma sign
     float beta = 4.0f;
-    
 
-    // Compute divergence and store it in D
-    // for (int i = 0; i < w; i++) {
-    //     for (int j = 0; j < h; j++) {            
-    //         float uR = (i < w - 1 ? data_in[asIdx(i + 1, j, 0, w, d)] : 0.0f) - (i > 0 ? data_in[asIdx(i - 1, j, 0, w, d)] : 0.0f);
-    //         float vT = (j < h - 1 ? data_in[asIdx(i, j + 1, 1, w, d)] : 0.0f) - (j > 0 ? data_in[asIdx(i, j - 1, 1, w, d)] : 0.0f);
+    float gamma = -1.0/dt;  // TODO: Should be (-2*rho/dt)
+    
+    // Compute divergence and store it in D (only once)
+    for (int i = 0; i < w; i++) {
+        for (int j = 0; j < h; j++){
+            // Calculate wrapped indices
+            int iminus = ((i-1) % w + w) % w;
+            int iplus = (i+1) % w;
+            int jminus = ((j-1) % h + h) % h;
+            int jplus = (j+1) % h;
+
+            // Calculate deltas
+            float uR = data_in[asIdx(iplus, j, 0, w, d)] - data_in[asIdx(iminus, j, 0, w, d)];
+            float vT = data_in[asIdx(i, jplus, 1, w, d)] - data_in[asIdx(i, jminus, 1, w, d)];
             
-    //         data_in[asIdx(i, j, 3, w, d)] = 0.5f * (uR + vT);
-    //     }
-    // }
+            // Store results in 4th channel
+            data_in[asIdx(i, j, 3, w, d)] =  gamma*(uR + vT);
+            vp_out->data[asIdx(i, j, 3, w, d)] = gamma*(uR + vT);
+        }
+    }
     
     for (int iter = 0; iter < NUM_JACOBI_ITERS; iter++) {
         for (int i = 0; i < w; i++) {
@@ -234,17 +244,13 @@ void computePressure(vp_field *vp, vp_field *vp_out){
                 int iplus = (i+1) % w;
                 int jminus = ((j-1) % h + h) % h;
                 int jplus = (j+1) % h;
-
-                // Compute divergence
-                float uR = data_in[asIdx(iplus, j, 0, w, d)] - data_in[asIdx(iminus, j, 0, w, d)];
-                float vT = data_in[asIdx(i, jplus, 1, w, d)] - data_in[asIdx(i, jminus, 1, w, d)];
             
                 // Pressure Values
                 float pL = data_in[asIdx(iminus, j, 2, w, d)];
                 float pR = data_in[asIdx(iplus, j, 2, w, d)];
                 float pT = data_in[asIdx(i, jminus, 2, w, d)];
                 float pB = data_in[asIdx(i, jplus, 2, w, d)];
-                float b = 0.5f * (uR + vT);
+                float b = data_in[asIdx(i, j, 3, w, d)];
 
                 vp_out->data[asIdx(i, j, 2, w, d)] = jacobi(pL, pR, pT, pB, alpha, beta, b);
             }
@@ -260,7 +266,7 @@ void computePressure(vp_field *vp, vp_field *vp_out){
     }
 }
 
-void subtractPressureGradient(vp_field *vp, vp_field *vp_out) {
+void subtractPressureGradient(vp_field *vp, vp_field *vp_out, float dt) {
     int w = vp->x, h = vp->y, d = vp->z;
     float *data_in = vp->data;
 
@@ -279,8 +285,8 @@ void subtractPressureGradient(vp_field *vp, vp_field *vp_out) {
             float pB = data_in[asIdx(i, jplus, 2, w, d)];
 
             // Compute gradient components
-            float gradX = (pR - pL)/2.0f;
-            float gradY = (pB - pT)/2.0f;
+            float gradX = (pR - pL)*dt/2.0f;
+            float gradY = (pB - pT)*dt/2.0f;
 
             // Subtract the gradient from velocity
             vp_out->data[asIdx(i, j, 0, w, d)] = data_in[asIdx(i, j, 0, w, d)] - gradX;
@@ -294,8 +300,8 @@ void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity)
     advect(vp, tmp, dt);
     diffuse(tmp, vp, viscosity, dt);
     //addForces(vp_field, forces);  // TODO: eventually add forces
-    computePressure(vp, tmp);
-    subtractPressureGradient(tmp, vp);
+    computePressure(vp, tmp, dt);
+    subtractPressureGradient(tmp, vp, dt);
 
     /*advect(vp, tmp, dt);
     float* tp = tmp->data;

@@ -28,11 +28,11 @@ __global__ void addForces(vp_field *vp, float *forces){
     // TODO: Perform force addition
 }
 
-__global__ void computePressure(vp_field *vp, vp_field *vp_out){
+__global__ void computePressure(vp_field *vp, vp_field *vp_out, float dt){
     // TODO: Perform pressure computation
 }
 
-__global__ void subtractPressureGradient(vp_field *vp, vp_field *vp_out){
+__global__ void subtractPressureGradient(vp_field *vp, vp_field *vp_out, float dt){
     // TODO: Perform pressure gradient subtraction
 }
 
