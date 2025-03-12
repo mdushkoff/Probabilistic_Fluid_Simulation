@@ -27,3 +27,6 @@ build
 logs
 
 vcpkg_installed/
+
+// VSCode
+.vscode
