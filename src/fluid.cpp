@@ -151,9 +151,9 @@ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt){
     for (int iter = 0; iter < NUM_JACOBI_ITERS; iter++)
     {
         // Iterate over 2D grid
-        for (int i = 0; i < w; i++)
+        for (int j = 0; j < h; j++)
         {
-            for (int j = 0; j < h; j++)
+            for (int i = 0; i < w; i++)
             {
                 // Calculate wrapped indices
                 int iminus = ((i-1) % w + w) % w;
@@ -218,8 +218,8 @@ void computePressure(vp_field *vp, vp_field *vp_out, float dt){
     float gamma = -1.0/dt;  // TODO: Should be (-2*rho/dt)
     
     // Compute divergence and store it in D (only once)
-    for (int i = 0; i < w; i++) {
-        for (int j = 0; j < h; j++){
+    for (int j = 0; j < h; j++){
+        for (int i = 0; i < w; i++) {
             // Calculate wrapped indices
             int iminus = ((i-1) % w + w) % w;
             int iplus = (i+1) % w;
@@ -237,8 +237,8 @@ void computePressure(vp_field *vp, vp_field *vp_out, float dt){
     }
     
     for (int iter = 0; iter < NUM_JACOBI_ITERS; iter++) {
-        for (int i = 0; i < w; i++) {
-            for (int j = 0; j < h; j++) {
+        for (int j = 0; j < h; j++) {
+            for (int i = 0; i < w; i++) {
                 // Calculate wrapped indices
                 int iminus = ((i-1) % w + w) % w;
                 int iplus = (i+1) % w;
@@ -270,8 +270,8 @@ void subtractPressureGradient(vp_field *vp, vp_field *vp_out, float dt) {
     int w = vp->x, h = vp->y, d = vp->z;
     float *data_in = vp->data;
 
-    for (int i = 0; i < w; i++) {
-        for (int j = 0; j < h; j++) {
+    for (int j = 0; j < h; j++) {
+        for (int i = 0; i < w; i++) {
             // Calculate wrapped indices
             int iminus = ((i-1) % w + w) % w;
             int iplus = (i+1) % w;
