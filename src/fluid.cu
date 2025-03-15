@@ -62,9 +62,71 @@ __global__ void advect(vp_field *vp, vp_field *vp_out, double dt){
     }
 }
 
-__global__ void advect_color(vp_field *image, vp_field *out, vp_field *vp, float dt){
+__global__ void advect_color(vp_field *image, vp_field *itmp, vp_field *vp, float dt){
     // TODO: Perform color advection
     // Get dimensions
+    int iwidth = image->x, iheight = image->y, idepth = image->z;
+    int vwidth = vp->x, vheight = vp->y, vdepth = vp->z;
+
+    // Float constants
+    float fiwidth = (float)iwidth;
+    float fiheight = (float)iheight;
+    float fvwidth = (float)vwidth;
+    float fvheight = (float)vheight;
+    float viw = (fvwidth/fiwidth); // Fractional velocity width to image width
+    float vih = (fvheight/fiheight); // Fractional velocity height to image height
+
+    int index_x = blockDim.x * blockIdx.x + threadIdx.x;
+    int index_y = blockDim.y * blockIdx.y + threadIdx.y;
+
+    int stride_x = blockDim.x * gridDim.x;
+    int stride_y = blockDim.y * gridDim.y;
+
+
+    if (index_x >= iwidth || index_y >= iheight) return;
+
+    // Loop through all pixels and advect
+    for (int j = index_y; j < iheight; j += stride_y) {
+        for (int i = index_x; i < iwidth; i += stride_x) {
+            // Get velocity adjusted coordinates
+            int vi = (int)((float)i * viw);
+            int vj = (int)((float)j * vih);
+
+            // Get velocity indices
+            int vx_idx = asIdx(vi, vj, 0, vwidth, vdepth); // Cell index for x
+            int vy_idx = asIdx(vi, vj, 1, vwidth, vdepth); // Cell index for y
+
+            // Calculate previous coordinate
+            float x_prev = (float)i - (dt/viw) * vp->data[vx_idx] / fiwidth; // Compute the where the color came from at the previous time stamp // Divided by h so can convert velocity into grid units
+            float y_prev = (float)j - (dt/vih) * vp->data[vy_idx] / fiheight;
+
+            // Clamp mode
+            //x_prev = std::max(0.5f, std::min<float>(fiwidth - 1.5, x_prev)); // Get the center of cooridinates and prevent out-of-bounds errors
+            //y_prev = std::max(0.5f, std::min<float>(fiheight - 1.5, y_prev));
+
+            // Wrapping mode
+            x_prev = fmod(fmod(x_prev, fiwidth)+fiwidth, fiwidth);
+            y_prev = fmod(fmod(y_prev, fiheight)+fiheight, fiheight);
+            //float xrem = fmod(x_prev, fiwidth);
+            //float yrem = fmod(y_prev, fiheight);
+            //x_prev = (x_prev >= 0) ? xrem : xrem + fiwidth;
+            //y_prev = (y_prev >= 0) ? yrem : yrem + fiheight;
+
+            int i0 = int(x_prev), j0 = int(y_prev);
+            int i1 = (i0 + 1) % iwidth, j1 = (j0 + 1) % iheight; // Find the integer grid coordinates surrounding (x, y)
+            float sx = x_prev - (float)i0, sy = y_prev - (float)j0; // Represent the fractional distances from (i0, j0)
+
+            // Apply velocity to each channel
+            for (int k=0; k<idepth; k++){
+                // Bilinear interpolation
+                itmp->data[asIdx(i, j, k, iwidth, idepth)] = 
+                    (1 - sx) * (1 - sy) * image->data[asIdx(i0, j0, k, iwidth, idepth)] +
+                    sx * (1 - sy) * image->data[asIdx(i1, j0, k, iwidth, idepth)] +
+                    (1 - sx) * sy * image->data[asIdx(i0, j1, k, iwidth, idepth)] +
+                    sx * sy * image->data[asIdx(i1, j1, k, iwidth, idepth)];
+            }
+        }
+    }
 }
 
 __global__ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt){
