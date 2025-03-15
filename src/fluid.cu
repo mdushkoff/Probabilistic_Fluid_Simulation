@@ -57,7 +57,7 @@ __global__ void computeDivergence(vp_field *vp, vp_field *vp_out, float dt) {
 }
 
 __global__ void advect(vp_field *vp, vp_field *vp_out, double dt){
-    // TODO: Perform advection
+    // Perform advection
     int width = vp->x, height = vp->y, depth = vp->z;
     float *field = vp->data;
     float *new_field = vp_out->data;
@@ -103,7 +103,7 @@ __global__ void advect(vp_field *vp, vp_field *vp_out, double dt){
 }
 
 __global__ void advect_color(vp_field *image, vp_field *itmp, vp_field *vp, float dt){
-    // TODO: Perform color advection
+    // Perform color advection
     // Get dimensions
     int iwidth = image->x, iheight = image->y, idepth = image->z;
     int vwidth = vp->x, vheight = vp->y, vdepth = vp->z;
@@ -278,7 +278,8 @@ void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity)
     dim3 gridDim((vp->x + blockDim.x - 1) / blockDim.x,
                  (vp->y + blockDim.y - 1) / blockDim.y);
 
-    // advect<<<gridDim,blockDim>>>(vp, tmp, dt);
+    advect<<<gridDim,blockDim>>>(vp, tmp, dt);
+    swapBuffers(vp, tmp);
 
     // For diffusion, do Jacobian iteration and swaps on host
     for (int iter = 0; iter < NUM_JACOBI_ITERS; iter++) {
@@ -291,7 +292,7 @@ void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity)
     if (NUM_JACOBI_ITERS % 2)
         swapBuffers(vp, tmp);
 
-    ////addForces<<<,BLOCK_SIZE>>>(vp_field, forces);  // TODO: eventually add forces
+    //addForces<<<gridDim,blockDim>>>(vp_field, forces);  // TODO: eventually add forces
     computeDivergence<<<gridDim,blockDim>>>(vp, tmp, dt);
     for (int iter = 0; iter < NUM_JACOBI_ITERS; iter++) {
         computePressure<<<gridDim, blockDim>>>(vp, tmp, dt);
@@ -302,5 +303,8 @@ void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity)
 }
 
 void advect_color_step(vp_field *image, vp_field *itmp, vp_field *vp, float dt){
-
+    dim3 blockDim(BLOCK_SIZE_X, BLOCK_SIZE_Y);
+    dim3 gridDim((vp->x + blockDim.x - 1) / blockDim.x,
+                 (vp->y + blockDim.y - 1) / blockDim.y);
+    advect_color<<<gridDim,blockDim>>>(image, itmp, vp, dt);
 }
