@@ -30,3 +30,4 @@ vcpkg_installed/
 
 // VSCode
 .vscode
+.DS_Store
