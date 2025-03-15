@@ -65,7 +65,47 @@ __global__ void advect_color(vp_field *image, vp_field *itmp, vp_field *vp, floa
 }
 
 __global__ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt){
-    // TODO: Perform diffusion
+    float alpha = viscosity * dt;
+    float beta = 1.0 + 4.0 * alpha;
+
+    int w = vp->x, h = vp->y, c = vp->z;
+    float *data = vp->data;
+    float *data_out = vp_out->data;
+
+    int tid_i = blockIdx.x * blockDim.x + threadIdx.x;
+    int tid_j = blockIdx.y * blockDim.y + threadIdx.y;
+
+    int stride_i = blockDim.x * gridDim.x;
+    int stride_j = blockDim.y * gridDim.y;
+
+    for (int i = tid_i; i < w; i += stride_i) {
+        for (int j = tid_j; j < h; j += stride_j) {
+            // For x and y components of velocity (channels 0 and 1)
+            for (int k = 0; k < 2; k++) {
+                int iminus = ( (i - 1 + w) % w );
+                int iplus  = ( (i + 1)     % w );
+                int jminus = ( (j - 1 + h) % h );
+                int jplus  = ( (j + 1)     % h );
+
+                // Get top, bottom, left, right elements
+                float left = data[asIdx(iminus, j, k, w, c)];
+                float right = data[asIdx(iplus, j, k, w, c)];
+                float top = data[asIdx(i, jminus, k, w, c)];
+                float bottom = data[asIdx(i, jplus, k, w, c)];
+                float u_n = data[asIdx(i, j, k, w, c)];
+
+                data_out[asIdx(i, j, k, w, c)] = jacobi(
+                    alpha * left,
+                    alpha * right,
+                    alpha * top,
+                    alpha * bottom,
+                    1.0f,
+                    beta,
+                    u_n
+                );
+            }
+        }
+    }
 }
 
 __global__ void addForces(vp_field *vp, float *forces){
@@ -132,8 +172,20 @@ void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity)
     dim3 blockDim(16, 16);
     dim3 gridDim((vp->x + blockDim.x - 1) / blockDim.x,
                  (vp->y + blockDim.y - 1) / blockDim.y);
+
     // advect<<<gridDim,blockDim>>>(vp, tmp, dt);
-    //diffuse<<<,BLOCK_SIZE>>>(vp, viscosity);
+
+    // For diffusion, do Jacobian iteration and swaps on host
+    for (int iter = 0; iter < NUM_JACOBI_ITERS; iter++) {
+        diffuse<<<gridDim, blockDim>>>(vp, tmp, viscosity, dt);
+        if (iter < NUM_JACOBI_ITERS - 1)
+            swapBuffers(vp, tmp);
+    }
+
+    // If odd number of iters, swap so result is in vp
+    if (NUM_JACOBI_ITERS % 2)
+        swapBuffers(vp, tmp);
+
     ////addForces<<<,BLOCK_SIZE>>>(vp_field, forces);  // TODO: eventually add forces
     // computePressuureGradient<<<,BLOCK_SIZE>>>(tmp, vp, dt);
     computeDivergence<<<gridDim,blockDim>>>(vp, tmp, dt);
