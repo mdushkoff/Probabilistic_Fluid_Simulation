@@ -10,7 +10,8 @@
 #include "../includes/fluid.hpp"
 
 // Definitions
-#define BLOCK_SIZE (256)
+#define BLOCK_SIZE_X (16)
+#define BLOCK_SIZE_Y (16)
 
 namespace {
     __device__ int asIdx(int i, int j, int k, int width, int channels) {
@@ -169,7 +170,7 @@ __global__ void subtractPressureGradient(vp_field *vp, vp_field *vp_out, float d
 }
 
 void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity){
-    dim3 blockDim(16, 16);
+    dim3 blockDim(BLOCK_SIZE_X, BLOCK_SIZE_Y);
     dim3 gridDim((vp->x + blockDim.x - 1) / blockDim.x,
                  (vp->y + blockDim.y - 1) / blockDim.y);
 
@@ -187,7 +188,6 @@ void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity)
         swapBuffers(vp, tmp);
 
     ////addForces<<<,BLOCK_SIZE>>>(vp_field, forces);  // TODO: eventually add forces
-    // computePressuureGradient<<<,BLOCK_SIZE>>>(tmp, vp, dt);
     computeDivergence<<<gridDim,blockDim>>>(vp, tmp, dt);
     for (int iter = 0; iter < NUM_JACOBI_ITERS; iter++) {
         computePressure<<<gridDim, blockDim>>>(vp, tmp, dt);
