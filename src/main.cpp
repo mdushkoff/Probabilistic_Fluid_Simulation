@@ -38,7 +38,7 @@
  * Print the program usage
  */
 void usage(char *prog){
-    std::cerr << "Usage: " << prog << " <n_timesteps> <delta_t> <viscosity> <input_image> <velocity_field> <output_dir>" << std::endl;
+    std::cerr << "Usage: " << prog << " <n_timesteps> <delta_t> <viscosity> <input_image> <velocity_field> [output_dir]" << std::endl;
 }
 
 /*
@@ -70,6 +70,9 @@ int main(int argc, char *argv[]){
     png_image input_image;
     png_image velocity_image;
 
+    // Flags
+    int flags = 0;
+
     // Image data
     vp_field image;   // Input image
     vp_field vp;      // 2D velocity + pressure field (RG,B)
@@ -88,9 +91,13 @@ int main(int argc, char *argv[]){
 #endif
 
     // Parse arguments
-    if (argc != 7){
+    if (argc != 6 && argc != 7){
         usage(argv[0]);
         return 1;
+    }
+    if (argc == 6){
+        // Run in timing mode with no file writing
+        flags |= 1;
     }
     int n_timesteps = atoi(argv[1]);
     float delta_t = atof(argv[2]);
@@ -215,8 +222,10 @@ int main(int argc, char *argv[]){
         advect_color_step(&image, &itmp, &vp, delta_t);
 #endif // USE_CUDA
 
-        // TODO: Write data to a new output file (don't measure this)
-        write_to_output(&image, &input_image, i, argv[6]);
+        // Write data to a new output file (don't measure this)
+        if (flags == 0){
+            write_to_output(&image, &input_image, i, argv[6]);
+        }
     }
     time_end = std::chrono::high_resolution_clock::now();
     
