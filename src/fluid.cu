@@ -11,9 +11,48 @@
 
 // Definitions
 #define BLOCK_SIZE (256)
+#define GRID_SIZE (16)
 
-__global__ void advect(vp_field *vp, vp_field *vp_out){
+__device__ int asIdx(int i, int j, int k, int width, int channels) {
+    return (j * width * channels) + (i * channels) + k;
+}
+
+__global__ void advect(vp_field *vp, vp_field *vp_out, double dt){
     // TODO: Perform advection
+    int width = vp->x, height = vp->y, depth = vp->z;
+    float *field = vp->data;
+    float *new_field = vp_out->data;
+
+    float fwidth = (float)width;
+    float fheight = (float)height;
+
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (i >= width || j >= height) return;
+
+    int x_idx = asIdx(i, j, 0, width, depth);
+    int y_idx = asIdx(i, j, 1, width, depth);
+
+    float x_prev = (float)i - dt * field[x_idx] / fwidth;
+    float y_prev = (float)j - dt * field[y_idx] / fheight;
+
+    float xrem = fmodf(fmodf(x_prev, fwidth) + fwidth, fwidth);
+    float yrem = fmodf(fmodf(y_prev, fheight) + fheight, fheight);
+    x_prev = xrem;
+    y_prev = yrem;
+
+    int i0 = int(x_prev), j0 = int(y_prev);
+    int i1 = (i0 + 1) % width, j1 = (j0 + 1) % height;
+    float sx = x_prev - (float)i0, sy = y_prev - (float)j0;
+
+    for (int vel_dir = 0; vel_dir < 2; vel_dir++) {
+        new_field[asIdx(i, j, vel_dir, width, depth)] =
+            (1 - sx) * (1 - sy) * field[asIdx(i0, j0, vel_dir, width, depth)] +
+            sx * (1 - sy) * field[asIdx(i1, j0, vel_dir, width, depth)] +
+            (1 - sx) * sy * field[asIdx(i0, j1, vel_dir, width, depth)] +
+            sx * sy * field[asIdx(i1, j1, vel_dir, width, depth)];
+    }
 }
 
 __global__ void advect_color(vp_field *image, vp_field *out, vp_field *vp, float dt){
