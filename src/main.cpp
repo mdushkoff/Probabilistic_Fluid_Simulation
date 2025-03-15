@@ -87,7 +87,7 @@ int main(int argc, char *argv[]){
     vp_field d_vtmp;  // Temporary velocity buffer on device memory
 
     // Streams
-    cudaStream_t streams[NUM_STREAMS];
+    cudaStream_t i_streams[NUM_STREAMS];
 #endif
 
     // Parse arguments
@@ -187,7 +187,7 @@ int main(int argc, char *argv[]){
 
     // Set up streams
     for (int i = 0; i < NUM_STREAMS; ++i){
-        cudaStreamCreate(&streams[i]);
+        cudaStreamCreate(&i_streams[i]);
     }
 
     // Allocate device memory
@@ -212,7 +212,11 @@ int main(int argc, char *argv[]){
         advect_color_step(&d_image, &d_itmp, &d_vp, delta_t);
 
         // Copy memory back to the host asynchronously  (TODO: Validate that this doesn't corrupt things)
-        cudaMemcpyAsync(vp.data, d_vp.data, velocity_bytes, cudaMemcpyDeviceToHost, streams[i % NUM_STREAMS]);
+        if (flags == 0){
+            cudaMemcpyAsync(image.data, d_image.data, input_bytes, cudaMemcpyDeviceToHost, i_streams[i % NUM_STREAMS]);
+            //cudaDeviceSynchronize();
+            //cudaMemcpy(image.data, d_image.data, input_bytes, cudaMemcpyDeviceToHost);
+        }
 #else
         // Simulate the fluid for a single timestep
         //std::cout << "STEP[" << i << "]: (" << vp.x << "," << vp.y << "," << vp.z << ") x (" << vtmp.x << "," << vtmp.y << "," << vtmp.z << ")" << std::endl; 
