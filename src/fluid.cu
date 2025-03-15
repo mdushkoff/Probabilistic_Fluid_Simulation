@@ -307,4 +307,5 @@ void advect_color_step(vp_field *image, vp_field *itmp, vp_field *vp, float dt){
     dim3 gridDim((vp->x + blockDim.x - 1) / blockDim.x,
                  (vp->y + blockDim.y - 1) / blockDim.y);
     advect_color<<<gridDim,blockDim>>>(image, itmp, vp, dt);
+    swapBuffers(image, itmp);
 }
