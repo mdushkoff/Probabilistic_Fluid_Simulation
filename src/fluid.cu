@@ -231,52 +231,68 @@ __global__ void computePressure(float *vp, float *vp_out, float dt, int vx, int 
     float *data = (vp);
     float *data_out = (vp_out);
 
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int tid_i = blockIdx.x * blockDim.x + threadIdx.x;
+    int tid_j = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (i >= w || j >= h) return;
+    int stride_i = blockDim.x * gridDim.x;
+    int stride_j = blockDim.y * gridDim.y;
 
-    int iminus = (i - 1 + w) % w;
-    int iplus  = (i + 1) % w;
-    int jminus = (j - 1 + h) % h;
-    int jplus  = (j + 1) %h;
+    for (int i = tid_i; i < w; i += stride_i) {
+        for (int j = tid_j; j < h; j += stride_j) {
 
-    float pL = data[asIdx(iminus, j, 2, w, c)];
-    float pR = data[asIdx(iplus,  j, 2, w, c)];
-    float pT = data[asIdx(i, jminus, 2, w, c)];
-    float pB = data[asIdx(i, jplus,  2, w, c)];
+            // if (i >= w || j >= h) return;
 
-    float b = data[asIdx(i, j, 3, w, c)];
+            int iminus = (i - 1 + w) % w;
+            int iplus  = (i + 1) % w;
+            int jminus = (j - 1 + h) % h;
+            int jplus  = (j + 1) %h;
 
-    data_out[asIdx(i, j, 2, w, c)] = jacobi(pL, pR, pT, pB, alpha, beta, b);
+            float pL = data[asIdx(iminus, j, 2, w, c)];
+            float pR = data[asIdx(iplus,  j, 2, w, c)];
+            float pT = data[asIdx(i, jminus, 2, w, c)];
+            float pB = data[asIdx(i, jplus,  2, w, c)];
+
+            float b = data[asIdx(i, j, 3, w, c)];
+
+            data_out[asIdx(i, j, 2, w, c)] = jacobi(pL, pR, pT, pB, alpha, beta, b);
+        }
+    }
 }
 
 __global__ void subtractPressureGradient(float *vp, float *vp_out, float dt, int vx, int vy, int vz){
     int w = vx, h = vy, c = vz;
 
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int tid_i = blockIdx.x * blockDim.x + threadIdx.x;
+    int tid_j = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (i >= w || j >= h) return;
+    int stride_i = blockDim.x * gridDim.x;
+    int stride_j = blockDim.y * gridDim.y;
 
-    float *data_in = (vp);
-    float *data_out = (vp_out);
+    for (int i = tid_i; i < w; i += stride_i) {
+        for (int j = tid_j; j < h; j += stride_j) {
 
-    int iminus = (i - 1 + w) % w;
-    int iplus  = (i + 1) % w;
-    int jminus = (j - 1 + h) % h;
-    int jplus  = (j + 1) % h;
+            // if (i >= w || j >= h) return;
 
-    float pL = data_in[asIdx(iminus, j, 2, w, c)];
-    float pR = data_in[asIdx(iplus, j, 2, w, c)];
-    float pT = data_in[asIdx(i, jminus, 2, w, c)];
-    float pB = data_in[asIdx(i, jplus, 2, w, c)];
+            float *data_in = (vp);
+            float *data_out = (vp_out);
 
-    float gradX = (pR - pL) * dt * 0.5f;
-    float gradY = (pB - pT) * dt * 0.5f;
+            int iminus = (i - 1 + w) % w;
+            int iplus  = (i + 1) % w;
+            int jminus = (j - 1 + h) % h;
+            int jplus  = (j + 1) % h;
 
-    data_out[asIdx(i, j, 0, w, c)] = data_in[asIdx(i, j, 0, w, c)] - gradX; // x velocity
-    data_out[asIdx(i, j, 1, w, c)] = data_in[asIdx(i, j, 1, w, c)] - gradY; // y velocity
+            float pL = data_in[asIdx(iminus, j, 2, w, c)];
+            float pR = data_in[asIdx(iplus, j, 2, w, c)];
+            float pT = data_in[asIdx(i, jminus, 2, w, c)];
+            float pB = data_in[asIdx(i, jplus, 2, w, c)];
+
+            float gradX = (pR - pL) * dt * 0.5f;
+            float gradY = (pB - pT) * dt * 0.5f;
+
+            data_out[asIdx(i, j, 0, w, c)] = data_in[asIdx(i, j, 0, w, c)] - gradX; // x velocity
+            data_out[asIdx(i, j, 1, w, c)] = data_in[asIdx(i, j, 1, w, c)] - gradY; // y velocity
+        }
+    }
 }
 
 void simulate_fluid_step(float **vp, float **tmp, float dt, float viscosity, int vx, int vy, int vz){
