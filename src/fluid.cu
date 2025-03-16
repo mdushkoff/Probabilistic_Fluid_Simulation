@@ -173,22 +173,6 @@ __global__ void advect_color(float *image, float *itmp, float *vp, float dt, int
             }
         }
     }
-
-    /*int index_x = blockDim.x * blockIdx.x + threadIdx.x;
-    int index_y = blockDim.y * blockIdx.y + threadIdx.y;
-
-    (image)[IX(index_x, index_y, 0, ix, iz)] = 0.5;
-    (image)[IX(index_x, index_y, 1, ix, iz)] = 0.5;
-    (image)[IX(index_x, index_y, 2, ix, iz)] = 1.0;
-    (image)[IX(index_x, index_y, 3, ix, iz)] = 1.0;*/
-    //(*image)[0] = 0.5;
-    /*printf("[%d, %d]: %d = %f %f %f %f\n", index_x, index_y, IX(index_x, index_y, 1, ix, iz),
-        (*image)[IX(index_x, index_y, 0, ix, iz)],
-        (*image)[IX(index_x, index_y, 1, ix, iz)],
-        (*image)[IX(index_x, index_y, 2, ix, iz)],
-        (*image)[IX(index_x, index_y, 3, ix, iz)]
-    );*/
-    //printf("[%d, %d]: %p\n", index_x, index_y, (image));
 }
 
 __global__ void diffuse(float *vp, float *vp_out, float viscosity, float dt, int vx, int vy, int vz){
