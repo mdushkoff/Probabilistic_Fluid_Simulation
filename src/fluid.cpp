@@ -4,6 +4,7 @@
 
 // System Includes
 #include <iostream>
+#include <random>
 #include <math.h>
 
 // Local Includes
@@ -295,6 +296,66 @@ void subtractPressureGradient(vp_field *vp, vp_field *vp_out, float dt) {
     }
 }
 
+namespace MCMC {
+    static std::mt19937 rng{std::random_device{}()};
+
+    void update_velocity(
+        vp_field *vp_in,
+        vp_field *vp_out,
+        float dt,
+        float viscosity,
+        int mcmc_iters,
+        float sigma  // standard deviation for noise
+    ) {
+        // PDE constants
+        float alpha = viscosity * dt;
+        float beta  = 1.0f + 4.0f * alpha;
+
+        int w = vp_in->x;
+        int h = vp_in->y;
+        int c = vp_in->z;
+
+        for (int iter = 0; iter < mcmc_iters; iter++) {
+            // For each cell in the domain
+            for (int j = 0; j < h; j++) {
+                for (int i = 0; i < w; i++) {
+                    int iminus = ( (i - 1) % w + w ) % w;
+                    int iplus  = ( i + 1 ) % w;
+                    int jminus = ( (j - 1) % h + h ) % h;
+                    int jplus  = ( j + 1 ) % h;
+
+                    // For each velocity channel, e.g. k=0 or k=1
+                    for (int k = 0; k < 2; k++)
+                    {
+                        float left   = vp_in->data[asIdx(iminus, j, k, w, c)];
+                        float right  = vp_in->data[asIdx(iplus,  j, k, w, c)];
+                        float top    = vp_in->data[asIdx(i, jminus, k, w, c)];
+                        float bottom = vp_in->data[asIdx(i, jplus,  k, w, c)];
+                        float center = vp_in->data[asIdx(i, j,      k, w, c)];
+
+                        // Jacobian update
+                        float meanVal = (alpha * (left + right + top + bottom) + center) / beta;
+
+                        // Sample from normal(mean, sigma^2)
+                        std::normal_distribution<float> normalDist(meanVal, sigma);
+                        float sampled = normalDist(rng);
+
+                        // Write to output buffer
+                        vp_out->data[asIdx(i, j, k, w, c)] = sampled;
+                    }
+                }
+            }
+
+            // Swap buffers each MCMC iteration
+            if (iter != (mcmc_iters - 1)) {
+                float *tmpPtr = vp_in->data;
+                vp_in->data = vp_out->data;
+                vp_out->data = tmpPtr;
+            }
+        }
+    }
+}
+
 void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity){
     // Execute operators in order (swapping buffers each step)
     advect(vp, tmp, dt);
@@ -302,6 +363,9 @@ void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity)
     //addForces(vp_field, forces);  // TODO: eventually add forces
     computePressure(vp, tmp, dt);
     subtractPressureGradient(tmp, vp, dt);
+
+    // // Smaller sigma -> less deviation from PDE solution
+    // MCMC::update_velocity(vp, tmp, dt, viscosity, 20, 0.001f);
 
     /*advect(vp, tmp, dt);
     float* tp = tmp->data;
