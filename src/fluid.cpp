@@ -21,7 +21,7 @@ namespace {
     }
 }
 
-void advect(vp_field *vp, vp_field *vp_out, double dt){
+void advect(vp_field *vp, vp_field *vp_out, float dt){
     // Perform advection
     int width = vp->x, height = vp->y, depth = vp->z;
     float *field = vp->data;

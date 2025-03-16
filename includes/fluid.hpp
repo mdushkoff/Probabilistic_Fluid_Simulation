@@ -27,9 +27,10 @@ typedef struct {
  *     vp_out - Result for modified vp
  */
 #ifdef USE_CUDA
-__global__
+__global__ void advect(float *vp, float *vp_out, float dt, int vx, int vy, int vz);
+#else
+void advect(vp_field *vp, vp_field *vp_out, float dt);
 #endif // USE_CUDA
-void advect(vp_field *vp, vp_field *vp_out);
 
 /*
  * Inputs:
@@ -39,9 +40,10 @@ void advect(vp_field *vp, vp_field *vp_out);
  *     dt - Change in time (time step)
  */
 #ifdef USE_CUDA
-__global__
-#endif // USE_CUDA
+__global__ void advect_color(float *image, float *out, float *vp, float dt, int ix, int iy, int iz, int vx, int vy, int vz);
+#else
 void advect_color(vp_field *image, vp_field *out, vp_field *vp, float dt);
+#endif // USE_CUDA
 
 /*
  * Inputs:
@@ -51,9 +53,10 @@ void advect_color(vp_field *image, vp_field *out, vp_field *vp, float dt);
  *     dt - Change in time (time step)
  */
 #ifdef USE_CUDA
-__global__
-#endif // USE_CUDA
+__global__ void diffuse(float *vp, float *vp_out, float viscosity, float dt, int vx, int vy, int vz);
+#else
 void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt);
+#endif // USE_CUDA
 
 /*
  * Inputs:
@@ -62,9 +65,10 @@ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt);
  *     forces - A 3D array of force values for each pixel in the grid
  */
 #ifdef USE_CUDA
-__global__
-#endif // USE_CUDA
+__global__ void addForces(float *vp, float *forces, int vx, int vy, int vz);
+#else
 void addForces(vp_field *vp, float *forces);
+#endif // USE_CUDA
 
 /*
  * Inputs:
@@ -72,9 +76,10 @@ void addForces(vp_field *vp, float *forces);
  *     vp_out - Result for modified vp
  */
 #ifdef USE_CUDA
-__global__
-#endif // USE_CUDA
+__global__ void computePressure(float *vp, float *vp_out, float dt, int vx, int vy, int vz);
+#else
 void computePressure(vp_field *vp, vp_field *vp_out, float dt);
+#endif // USE_CUDA
 
 /*
  * Inputs:
@@ -82,9 +87,10 @@ void computePressure(vp_field *vp, vp_field *vp_out, float dt);
  *     vp_out - Result for modified vp
  */
 #ifdef USE_CUDA
-__global__
-#endif // USE_CUDA
+__global__ void subtractPressureGradient(float *vp, float *vp_out, float dt, int vx, int vy, int vz);
+#else
 void subtractPressureGradient(vp_field *vp, vp_field *vp_out, float dt);
+#endif // USE_CUDA
 
 /*
  * Simulate the current fluid domain for a single
@@ -97,11 +103,19 @@ void subtractPressureGradient(vp_field *vp, vp_field *vp_out, float dt);
  *     dt - The simulation time step resolution
  *     viscosity - The viscosity of the fluid
  */
+#ifdef USE_CUDA
+void simulate_fluid_step(float **vp, float **tmp, float dt, float viscosity, int vx, int vy, int vz);
+#else
 void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity);
+#endif // USE_CUDA
 
 /*
  *
  */
+#ifdef USE_CUDA
+void advect_color_step(float **image, float **itmp, float **vp, float dt, int ix, int iy, int iz, int vx, int vy, int vz);
+#else
 void advect_color_step(vp_field *image, vp_field *itmp, vp_field *vp, float dt);
+#endif // USE_CUDA
 
 #endif // FLUID_HPP_

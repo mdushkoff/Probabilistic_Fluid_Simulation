@@ -73,6 +73,7 @@ int read_png_to_array(png_image *image, char *fn, float **x){
                     free(buffer);
                     return 1;
                 }
+                /*(*x) = (float*)malloc(sizeof(float)*n_elements);*/
 #else
                 (*x) = (float*)malloc(sizeof(float)*n_elements);
 #endif // USE_CUDA

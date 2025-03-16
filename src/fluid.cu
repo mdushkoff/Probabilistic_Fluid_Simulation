@@ -5,6 +5,7 @@
 
 // System Includes
 #include <iostream>
+#include <stdio.h>
 
 // Local Includes
 #include "../includes/fluid.hpp"
@@ -12,6 +13,8 @@
 // Definitions
 #define BLOCK_SIZE_X (16)
 #define BLOCK_SIZE_Y (16)
+
+#define IX(i,j,k,w,c) ((j*w*c)+(i*c)+k)
 
 namespace {
     __device__ int asIdx(int i, int j, int k, int width, int channels) {
@@ -22,23 +25,26 @@ namespace {
         return (xl+xr+xt+xb+alpha*b)/beta;
     }
 
-    void swapBuffers(vp_field *vp, vp_field *tmp) {
-        float* swap = vp->data;
+    void swapBuffers(float **vp, float **tmp) {
+        /*float* swap = vp->data;
         vp->data = tmp->data;
-        tmp->data = swap;
+        tmp->data = swap;*/
+        float *swap = *vp;
+        (*vp) = (*tmp);
+        (*tmp) = swap;
     }
 }
 
-__global__ void computeDivergence(vp_field *vp, vp_field *vp_out, float dt) {
-    int w = vp->x, h = vp->y, c = vp->z;
+__global__ void computeDivergence(float *vp, float *vp_out, float dt, int vx, int vy, int vz) {
+    int w = vx, h = vy, c = vz;
 
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
 
     if (i >= w || j >= h) return;
 
-    float *data_in = vp->data;
-    float *data_out = vp_out->data;
+    float *data_in = (vp);
+    float *data_out = (vp_out);
 
     float gamma = -1.0f / dt;  // Divergence scaling factor
 
@@ -56,11 +62,11 @@ __global__ void computeDivergence(vp_field *vp, vp_field *vp_out, float dt) {
     data_out[asIdx(i, j, 3, w, c)] = divergence;
 }
 
-__global__ void advect(vp_field *vp, vp_field *vp_out, double dt){
+__global__ void advect(float *vp, float *vp_out, float dt, int vx, int vy, int vz){
     // Perform advection
-    int width = vp->x, height = vp->y, depth = vp->z;
-    float *field = vp->data;
-    float *new_field = vp_out->data;
+    int width = vx, height = vy, depth = vz;
+    float *field = (vp);
+    float *new_field = (vp_out);
 
     float fwidth = (float)width;
     float fheight = (float)height;
@@ -102,11 +108,11 @@ __global__ void advect(vp_field *vp, vp_field *vp_out, double dt){
     }
 }
 
-__global__ void advect_color(vp_field *image, vp_field *itmp, vp_field *vp, float dt){
+__global__ void advect_color(float *image, float *itmp, float *vp, float dt, int ix, int iy, int iz, int vx, int vy, int vz){
     // Perform color advection
     // Get dimensions
-    int iwidth = image->x, iheight = image->y, idepth = image->z;
-    int vwidth = vp->x, vheight = vp->y, vdepth = vp->z;
+    int iwidth = ix, iheight = iy, idepth = iz;
+    int vwidth = vx, vheight = vy, vdepth = vz;
 
     // Float constants
     float fiwidth = (float)iwidth;
@@ -137,8 +143,8 @@ __global__ void advect_color(vp_field *image, vp_field *itmp, vp_field *vp, floa
             int vy_idx = asIdx(vi, vj, 1, vwidth, vdepth); // Cell index for y
 
             // Calculate previous coordinate
-            float x_prev = (float)i - (dt/viw) * vp->data[vx_idx] / fiwidth; // Compute the where the color came from at the previous time stamp // Divided by h so can convert velocity into grid units
-            float y_prev = (float)j - (dt/vih) * vp->data[vy_idx] / fiheight;
+            float x_prev = (float)i - (dt/viw) * (vp)[vx_idx] / fiwidth; // Compute the where the color came from at the previous time stamp // Divided by h so can convert velocity into grid units
+            float y_prev = (float)j - (dt/vih) * (vp)[vy_idx] / fiheight;
 
             // Clamp mode
             //x_prev = std::max(0.5f, std::min<float>(fiwidth - 1.5, x_prev)); // Get the center of cooridinates and prevent out-of-bounds errors
@@ -159,23 +165,39 @@ __global__ void advect_color(vp_field *image, vp_field *itmp, vp_field *vp, floa
             // Apply velocity to each channel
             for (int k=0; k<idepth; k++){
                 // Bilinear interpolation
-                itmp->data[asIdx(i, j, k, iwidth, idepth)] = 
-                    (1 - sx) * (1 - sy) * image->data[asIdx(i0, j0, k, iwidth, idepth)] +
-                    sx * (1 - sy) * image->data[asIdx(i1, j0, k, iwidth, idepth)] +
-                    (1 - sx) * sy * image->data[asIdx(i0, j1, k, iwidth, idepth)] +
-                    sx * sy * image->data[asIdx(i1, j1, k, iwidth, idepth)];
+                (itmp)[asIdx(i, j, k, iwidth, idepth)] = 
+                    (1 - sx) * (1 - sy) * (image)[asIdx(i0, j0, k, iwidth, idepth)] +
+                    sx * (1 - sy) * (image)[asIdx(i1, j0, k, iwidth, idepth)] +
+                    (1 - sx) * sy * (image)[asIdx(i0, j1, k, iwidth, idepth)] +
+                    sx * sy * (image)[asIdx(i1, j1, k, iwidth, idepth)];
             }
         }
     }
+
+    /*int index_x = blockDim.x * blockIdx.x + threadIdx.x;
+    int index_y = blockDim.y * blockIdx.y + threadIdx.y;
+
+    (image)[IX(index_x, index_y, 0, ix, iz)] = 0.5;
+    (image)[IX(index_x, index_y, 1, ix, iz)] = 0.5;
+    (image)[IX(index_x, index_y, 2, ix, iz)] = 1.0;
+    (image)[IX(index_x, index_y, 3, ix, iz)] = 1.0;*/
+    //(*image)[0] = 0.5;
+    /*printf("[%d, %d]: %d = %f %f %f %f\n", index_x, index_y, IX(index_x, index_y, 1, ix, iz),
+        (*image)[IX(index_x, index_y, 0, ix, iz)],
+        (*image)[IX(index_x, index_y, 1, ix, iz)],
+        (*image)[IX(index_x, index_y, 2, ix, iz)],
+        (*image)[IX(index_x, index_y, 3, ix, iz)]
+    );*/
+    //printf("[%d, %d]: %p\n", index_x, index_y, (image));
 }
 
-__global__ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float dt){
+__global__ void diffuse(float *vp, float *vp_out, float viscosity, float dt, int vx, int vy, int vz){
     float alpha = viscosity * dt;
     float beta = 1.0 + 4.0 * alpha;
 
-    int w = vp->x, h = vp->y, c = vp->z;
-    float *data = vp->data;
-    float *data_out = vp_out->data;
+    int w = vx, h = vy, c = vz;
+    float *data = (vp);
+    float *data_out = (vp_out);
 
     int tid_i = blockIdx.x * blockDim.x + threadIdx.x;
     int tid_j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -213,17 +235,17 @@ __global__ void diffuse(vp_field *vp, vp_field *vp_out, float viscosity, float d
     }
 }
 
-__global__ void addForces(vp_field *vp, float *forces){
+__global__ void addForces(float *vp, float *forces, int vx, int vy, int vz){
     // TODO: Perform force addition
 }
 
-__global__ void computePressure(vp_field *vp, vp_field *vp_out, float dt){
+__global__ void computePressure(float *vp, float *vp_out, float dt, int vx, int vy, int vz){
     float alpha = 1.0f;
     float beta  = 4.0f;
 
-    int w = vp->x, h = vp->y, c = vp->z;
-    float *data = vp->data;
-    float *data_out = vp_out->data;
+    int w = vx, h = vy, c = vz;
+    float *data = (vp);
+    float *data_out = (vp_out);
 
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -245,16 +267,16 @@ __global__ void computePressure(vp_field *vp, vp_field *vp_out, float dt){
     data_out[asIdx(i, j, 2, w, c)] = jacobi(pL, pR, pT, pB, alpha, beta, b);
 }
 
-__global__ void subtractPressureGradient(vp_field *vp, vp_field *vp_out, float dt){
-    int w = vp->x, h = vp->y, c = vp->z;
+__global__ void subtractPressureGradient(float *vp, float *vp_out, float dt, int vx, int vy, int vz){
+    int w = vx, h = vy, c = vz;
 
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
 
     if (i >= w || j >= h) return;
 
-    float *data_in = vp->data;
-    float *data_out = vp_out->data;
+    float *data_in = (vp);
+    float *data_out = (vp_out);
 
     int iminus = (i - 1 + w) % w;
     int iplus  = (i + 1) % w;
@@ -273,17 +295,17 @@ __global__ void subtractPressureGradient(vp_field *vp, vp_field *vp_out, float d
     data_out[asIdx(i, j, 1, w, c)] = data_in[asIdx(i, j, 1, w, c)] - gradY; // y velocity
 }
 
-void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity){
+void simulate_fluid_step(float **vp, float **tmp, float dt, float viscosity, int vx, int vy, int vz){
     dim3 blockDim(BLOCK_SIZE_X, BLOCK_SIZE_Y);
-    dim3 gridDim((vp->x + blockDim.x - 1) / blockDim.x,
-                 (vp->y + blockDim.y - 1) / blockDim.y);
+    dim3 gridDim((vx + blockDim.x - 1) / blockDim.x,
+                 (vy + blockDim.y - 1) / blockDim.y);
 
-    advect<<<gridDim,blockDim>>>(vp, tmp, dt);
+    advect<<<gridDim,blockDim>>>(*vp, *tmp, dt, vx, vy, vz);
     swapBuffers(vp, tmp);
 
     // For diffusion, do Jacobian iteration and swaps on host
     for (int iter = 0; iter < NUM_JACOBI_ITERS; iter++) {
-        diffuse<<<gridDim, blockDim>>>(vp, tmp, viscosity, dt);
+        diffuse<<<gridDim, blockDim>>>(*vp, *tmp, viscosity, dt, vx, vy, vz);
         if (iter < NUM_JACOBI_ITERS - 1)
             swapBuffers(vp, tmp);
     }
@@ -293,19 +315,19 @@ void simulate_fluid_step(vp_field *vp, vp_field *tmp, float dt, float viscosity)
         swapBuffers(vp, tmp);
 
     //addForces<<<gridDim,blockDim>>>(vp_field, forces);  // TODO: eventually add forces
-    computeDivergence<<<gridDim,blockDim>>>(vp, tmp, dt);
+    computeDivergence<<<gridDim,blockDim>>>(*vp, *tmp, dt, vx, vy, vz);
     for (int iter = 0; iter < NUM_JACOBI_ITERS; iter++) {
-        computePressure<<<gridDim, blockDim>>>(vp, tmp, dt);
+        computePressure<<<gridDim, blockDim>>>(*vp, *tmp, dt, vx, vy, vz);
         if (iter < NUM_JACOBI_ITERS - 1)
             swapBuffers(vp, tmp);
     }
-    subtractPressureGradient<<<gridDim,blockDim>>>(tmp, vp, dt);
+    subtractPressureGradient<<<gridDim,blockDim>>>(*tmp, *vp, dt, vx, vy, vz);
 }
 
-void advect_color_step(vp_field *image, vp_field *itmp, vp_field *vp, float dt){
+void advect_color_step(float **image, float **itmp, float **vp, float dt, int ix, int iy, int iz, int vx, int vy, int vz){
     dim3 blockDim(BLOCK_SIZE_X, BLOCK_SIZE_Y);
-    dim3 gridDim((vp->x + blockDim.x - 1) / blockDim.x,
-                 (vp->y + blockDim.y - 1) / blockDim.y);
-    advect_color<<<gridDim,blockDim>>>(image, itmp, vp, dt);
+    dim3 gridDim((ix + blockDim.x - 1) / blockDim.x,
+                 (iy + blockDim.y - 1) / blockDim.y);
+    advect_color<<<gridDim,blockDim>>>(*image, *itmp, *vp, dt, ix, iy, iz, vx, vy, vz);
     swapBuffers(image, itmp);
 }

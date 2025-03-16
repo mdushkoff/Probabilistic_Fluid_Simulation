@@ -41,6 +41,14 @@ void usage(char *prog){
     std::cerr << "Usage: " << prog << " <n_timesteps> <delta_t> <viscosity> <input_image> <velocity_field> [output_dir]" << std::endl;
 }
 
+#ifdef USE_CUDA
+void cudaValidate(cudaError_t err){
+    if (err != cudaSuccess){
+        std::cerr << cudaGetErrorString(err) << std::endl;
+    }
+}
+#endif // USE_CUDA
+
 /*
  * Write an output to the results directory.
  *
@@ -81,10 +89,14 @@ int main(int argc, char *argv[]){
 
 #ifdef USE_CUDA
     // Device data
-    vp_field d_image; // Input image on device memory
+    /*vp_field d_image; // Input image on device memory
     vp_field d_vp;    // 2D Velocity + pressure field (RG,B) on device memory
     vp_field d_itmp;  // Temporary image buffer on device memory
-    vp_field d_vtmp;  // Temporary velocity buffer on device memory
+    vp_field d_vtmp;  // Temporary velocity buffer on device memory*/
+    float *d_image;
+    float *d_vp;
+    float *d_itmp;
+    float *d_vtmp;
 
     // Streams
     cudaStream_t i_streams[NUM_STREAMS];
@@ -141,7 +153,7 @@ int main(int argc, char *argv[]){
     vtmp.y = velocity_image.height;
     vtmp.z = NUM_CHANNELS;
 #ifdef USE_CUDA
-    d_image.x = input_image.width;
+    /*d_image.x = input_image.width;
     d_image.y = input_image.height;
     d_image.z = NUM_CHANNELS;
     d_vp.x = velocity_image.width;
@@ -152,7 +164,7 @@ int main(int argc, char *argv[]){
     d_itmp.z = NUM_CHANNELS;
     d_vtmp.x = velocity_image.width;
     d_vtmp.y = velocity_image.height;
-    d_vtmp.z = NUM_CHANNELS;
+    d_vtmp.z = NUM_CHANNELS;*/
 #endif // USE_CUDA
 
     // Rescale velocity data to be within the range
@@ -182,19 +194,20 @@ int main(int argc, char *argv[]){
         }
     }
 #ifdef USE_CUDA
-    cudaMalloc((void**)&(d_itmp.data), input_bytes);
-    cudaMalloc((void**)&(d_vtmp.data), velocity_bytes);
-
     // Set up streams
     for (int i = 0; i < NUM_STREAMS; ++i){
         cudaStreamCreate(&i_streams[i]);
     }
 
     // Allocate device memory
-    cudaMalloc((void**)&(d_vp.data), velocity_bytes);
+    cudaValidate(cudaMalloc((void**)&d_image, input_bytes));
+    cudaValidate(cudaMalloc((void**)&d_vp, velocity_bytes));
+    cudaValidate(cudaMalloc((void**)&d_itmp, input_bytes));
+    cudaValidate(cudaMalloc((void**)&d_vtmp, velocity_bytes));
 
     // Copy memory to the device
-    cudaMemcpy(d_vp.data, vp.data, velocity_bytes, cudaMemcpyHostToDevice);
+    cudaValidate(cudaMemcpy(d_image, image.data, input_bytes, cudaMemcpyHostToDevice));
+    cudaValidate(cudaMemcpy(d_vp, vp.data, velocity_bytes, cudaMemcpyHostToDevice));
 #endif // USE_CUDA
 
     // Debug TODO: condition on debug output
@@ -206,16 +219,16 @@ int main(int argc, char *argv[]){
     for (int i=0; i<n_timesteps; i++){
 #ifdef USE_CUDA
         // Simulate the fluid for a single timestep on the device
-        simulate_fluid_step(&d_vp, &d_vtmp, delta_t, viscosity);
+        simulate_fluid_step(&d_vp, &d_vtmp, delta_t, viscosity, vp.x, vp.y, vp.z);
 
         // Run advection on the color data
-        advect_color_step(&d_image, &d_itmp, &d_vp, delta_t);
+        advect_color_step(&d_image, &d_itmp, &d_vp, delta_t, image.x, image.y, image.z, vp.x, vp.y, vp.z);
 
         // Copy memory back to the host asynchronously  (TODO: Validate that this doesn't corrupt things)
         if (flags == 0){
-            cudaMemcpyAsync(image.data, d_image.data, input_bytes, cudaMemcpyDeviceToHost, i_streams[i % NUM_STREAMS]);
-            //cudaDeviceSynchronize();
-            //cudaMemcpy(image.data, d_image.data, input_bytes, cudaMemcpyDeviceToHost);
+            //cudaMemcpyAsync(image.data, d_image, input_bytes, cudaMemcpyDeviceToHost, i_streams[i % NUM_STREAMS]);
+            cudaDeviceSynchronize();
+            cudaValidate(cudaMemcpy(image.data, d_image, input_bytes, cudaMemcpyDeviceToHost));
         }
 #else
         // Simulate the fluid for a single timestep
@@ -251,10 +264,10 @@ int main(int argc, char *argv[]){
     cudaFreeHost(vp.data);
 
     // Free CUDA memory
-    cudaFree(d_image.data);
-    cudaFree(d_vp.data);
-    cudaFree(d_itmp.data);
-    cudaFree(d_vtmp.data);
+    cudaFree(d_image);
+    cudaFree(d_vp);
+    cudaFree(d_itmp);
+    cudaFree(d_vtmp);
 #else
     // Free memory
     free(image.data);
